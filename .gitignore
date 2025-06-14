@@ -1,0 +1,50 @@
+# .gitignore for a typical C# .NET class library/project
+# Build results
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+
+# Rider
+.idea/
+*.sln.iml
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# NuGet packages
+*.nupkg
+# The packages folder can be ignored if it exists in your project
+**/packages/*
+!**/packages/build/
+!**/packages/repositories.config
+
+# Others
+*.log
+*.vspscc
+*.vssscc
+_ReSharper*/
+[Tt]est[Rr]esult*/
+
+# DotCover
+*.dotCover
+
+# Local history for Visual Studio
+.localhistory/
+
+# Backup & crash files
+*.bak
+*.swp
+*.tmp
+*.tmp_proj
+
+# Azure Pipelines
+*.azure-pipelines.yml
