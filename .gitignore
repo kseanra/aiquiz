@@ -48,3 +48,5 @@ _ReSharper*/
 
 # Azure Pipelines
 *.azure-pipelines.yml
+
+.fake
