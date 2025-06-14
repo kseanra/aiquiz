@@ -35,7 +35,7 @@ namespace aiquiz_api.Controllers
         public async Task<IActionResult> GetQuiz([FromQuery] string topic = "general knowledge")
         {
             var quiz = await _quizManager.GenerateQuizAsync(topic);
-            return Ok(new { Quiz = quiz });
+            return Ok(quiz);
         }
     }
 }

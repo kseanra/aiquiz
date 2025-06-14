@@ -4,6 +4,7 @@ using Azure.AI.OpenAI;
 using Microsoft.Extensions.Configuration;
 using aiquiz_api.Models;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 
 namespace aiquiz_api.Services
 {
@@ -28,43 +29,44 @@ namespace aiquiz_api.Services
             _chatClient = azureClient.GetChatClient(deploymentName);
         }
 
-        public async Task<string> GenerateQuizAsync(string topic)
+        public async Task<List<Quiz>> GenerateQuizAsync(string topic)
         {
             List<ChatMessage> messages = new List<ChatMessage>()
             {
-                new UserChatMessage($"Generate 4 quizs about {topic}?, with 4 options and the correct answer. The quiz should be in the following format: Question: [question text] Options: [option1, option2, option3, option4] Answer: [correct answer]."),
+                new UserChatMessage($"Generate 4 quizs about {topic}?, with 4 options and the correct answer. Only return json serialized string of object {{ Question: string,  Options: string[] Answer: string. }}"),
             };
 
             var response = await _chatClient.CompleteChatAsync(messages);
-            System.Console.WriteLine(response.Value.Content[0].Text);
-            // Append the model response to the chat history.
-            messages.Add(new AssistantChatMessage(response.Value.Content[0].Text));
-            return response.Value.Content[0].Text;
+            return GetQuizzesFromResponse(response.Value.Content[0].Text);
         }
 
         public List<Quiz> GetQuizzesFromResponse(string response)
         {
-            var quizzes = new List<Quiz>();
-            var quizBlocks = Regex.Split(response, @"### Quiz \\d+").Where(q => !string.IsNullOrWhiteSpace(q));
-            int id = 1;
-            foreach (var block in quizBlocks)
+            try
             {
-                var questionMatch = Regex.Match(block, @"Question: (.*?)  ");
-                var optionsMatch = Regex.Match(block, @"Options: \[(.*?)\]  ");
-                var answerMatch = Regex.Match(block, @"Answer: (.*?)  ");
-                if (questionMatch.Success && optionsMatch.Success && answerMatch.Success)
-                {
-                    var options = optionsMatch.Groups[1].Value.Split(',').Select(o => o.Trim()).ToList();
-                    quizzes.Add(new Quiz
-                    {
-                        Id = id++,
-                        Question = questionMatch.Groups[1].Value.Trim(),
-                        Options = options,
-                        Answer = answerMatch.Groups[1].Value.Trim()
-                    });
-                }
+                // Remove the code block formatting and any unnecessary characters
+                var jsonString = response?.Replace("\n", string.Empty).Replace("        ", string.Empty).Replace("`", string.Empty).Replace("\\", string.Empty) ?? string.Empty;
+
+                // Remove the "json" prefix if present
+                if (jsonString.StartsWith("json"))
+                    jsonString = jsonString.Substring(4);
+                // Remove the code block formatting
+
+                var quizzes = JsonSerializer.Deserialize<List<Quiz>>(jsonString ?? "[]") ?? new List<Quiz>();
+                return quizzes;
             }
-            return quizzes;
+            catch (JsonException ex)
+            {
+                // Handle JSON parsing errors
+                Console.WriteLine($"Error parsing JSON response: {ex.Message}");
+                return new List<Quiz>();
+            }
+            catch (Exception ex)
+            {
+                // Handle any other exceptions
+                Console.WriteLine($"An error occurred: {ex.Message}");
+                return new List<Quiz>();
+            }
         }
     }
 }
