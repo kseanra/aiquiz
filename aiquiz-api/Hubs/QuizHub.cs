@@ -12,8 +12,15 @@ namespace aiquiz_api.Hubs
         public override Task OnConnectedAsync()
         {
             Players[Context.ConnectionId] = new PlayerState();
-            Clients.Caller.SendAsync("ReceiveQuestion", Questions[0]);
+            Clients.Caller.SendAsync("RequestName"); // Ask user to submit their name
             return base.OnConnectedAsync();
+        }
+
+        public async Task SubmitName(string name)
+        {
+            var player = Players[Context.ConnectionId];
+            player.Name = name;
+            await Clients.Caller.SendAsync("ReceiveQuestion", Questions[0]);
         }
 
         public async Task SubmitAnswer(string answer)
@@ -23,7 +30,7 @@ namespace aiquiz_api.Hubs
 
             if (player.CurrentQuestionIndex >= TotalQuestions)
             {
-                await Clients.All.SendAsync("GameOver", Context.ConnectionId);
+                await Clients.All.SendAsync("GameOver", player.Name ?? "Player");
             }
             else
             {
@@ -40,6 +47,7 @@ namespace aiquiz_api.Hubs
         private class PlayerState
         {
             public int CurrentQuestionIndex { get; set; } = 0;
+            public string? Name { get; set; }
         }
     }
 }
