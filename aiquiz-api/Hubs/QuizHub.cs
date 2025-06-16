@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
-
+using aiquiz_api.Models;
 namespace aiquiz_api.Hubs
 {
     public class QuizHub : Hub
@@ -9,11 +9,14 @@ namespace aiquiz_api.Hubs
         private static readonly List<string> Questions = new() { "Q1", "Q2", "Q3" };
         private const int TotalQuestions = 3;
 
-        public override Task OnConnectedAsync()
+        public override async Task OnConnectedAsync()
         {
             Players[Context.ConnectionId] = new PlayerState();
-            Clients.Caller.SendAsync("RequestName"); // Ask user to submit their name
-            return base.OnConnectedAsync();
+        
+            await Clients.Caller.SendAsync("RequestName");
+             var playerStates = Players.Select(p => new PlayerState() { Name = p.Key, ConnectionId = p.Key, JustJoined = true }).ToList();
+            await Clients.All.SendAsync("PlayersStatus", playerStates);
+            await base.OnConnectedAsync();
         }
 
         public async Task SubmitName(string name)
@@ -21,6 +24,9 @@ namespace aiquiz_api.Hubs
             var player = Players[Context.ConnectionId];
             player.Name = name;
             await Clients.Caller.SendAsync("ReceiveQuestion", Questions[0]);
+            // Notify all players about the new player and everyone's status
+            var playerStates = Players.Select(p => new PlayerState() { Name = p.Value.Name, CurrentQuestionIndex = 0, ConnectionId = p.Key }).ToList();
+            await Clients.All.SendAsync("PlayersStatus", playerStates);
         }
 
         public async Task SubmitAnswer(string answer)
@@ -28,9 +34,13 @@ namespace aiquiz_api.Hubs
             var player = Players[Context.ConnectionId];
             player.CurrentQuestionIndex++;
 
+            // Notify all players about everyone's status after answer
+            var playerStates = Players.Select(p => new PlayerState() { Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key }).ToList();
+            await Clients.All.SendAsync("PlayersStatus", playerStates);
+
             if (player.CurrentQuestionIndex >= TotalQuestions)
             {
-                await Clients.All.SendAsync("GameOver", player.Name ?? "Player");
+                await Clients.All.SendAsync("GameOver", Context.ConnectionId);
             }
             else
             {
@@ -38,16 +48,18 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        public override Task OnDisconnectedAsync(Exception? exception)
+        public async Task Ping()
         {
-            Players.TryRemove(Context.ConnectionId, out _);
-            return base.OnDisconnectedAsync(exception);
+            await Clients.Caller.SendAsync("Pong", DateTime.UtcNow);
         }
 
-        private class PlayerState
+        public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            public int CurrentQuestionIndex { get; set; } = 0;
-            public string? Name { get; set; }
+            Players.TryRemove(Context.ConnectionId, out _);
+            // Notify all players about updated status
+            var playerStates = Players.Select(p => new PlayerState(){ Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key, Disconnected = true }).ToList();
+            await Clients.All.SendAsync("PlayersStatus", playerStates);
+            await base.OnDisconnectedAsync(exception);
         }
     }
 }
