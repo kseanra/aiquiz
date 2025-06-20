@@ -14,11 +14,12 @@ namespace aiquiz_api.Hubs
             Players[Context.ConnectionId] = new PlayerState();
         
             await Clients.Caller.SendAsync("RequestName");
-             var playerStates = Players.Select(p => new PlayerState() { Name = p.Key, ConnectionId = p.Key, JustJoined = true }).ToList();
-            await Clients.All.SendAsync("PlayersStatus", playerStates);
+            var playerStates = Players.Select(p => new PlayerState() { Name = p.Key, ConnectionId = p.Key, Status = PlayerStatus.JustJoined }).ToList();
+            //await Clients.All.SendAsync("PlayersStatus", playerStates);
             await base.OnConnectedAsync();
         }
 
+        
         public async Task SubmitName(string name)
         {
             var player = Players[Context.ConnectionId];
@@ -27,6 +28,19 @@ namespace aiquiz_api.Hubs
             // Notify all players about the new player and everyone's status
             var playerStates = Players.Select(p => new PlayerState() { Name = p.Value.Name, CurrentQuestionIndex = 0, ConnectionId = p.Key }).ToList();
             await Clients.All.SendAsync("PlayersStatus", playerStates);
+        }
+        
+        public async Task RadyForGame()
+        {
+            var player = Players[Context.ConnectionId];
+            player.CurrentQuestionIndex = 0;
+
+            // Notify all players about everyone's status
+            var playerStates = Players.Select(p => new PlayerState() { Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key, Status = PlayerStatus.ReadyForGame }).ToList();
+            await Clients.All.SendAsync("PlayersStatus", playerStates);
+
+            // Send the first question to the player
+            await Clients.Caller.SendAsync("ReceiveQuestion", Questions[player.CurrentQuestionIndex]);
         }
 
         public async Task SubmitAnswer(string answer)
@@ -57,7 +71,7 @@ namespace aiquiz_api.Hubs
         {
             Players.TryRemove(Context.ConnectionId, out _);
             // Notify all players about updated status
-            var playerStates = Players.Select(p => new PlayerState(){ Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key, Disconnected = true }).ToList();
+            var playerStates = Players.Select(p => new PlayerState(){ Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key, Status = PlayerStatus.Disconnected }).ToList();
             await Clients.All.SendAsync("PlayersStatus", playerStates);
             await base.OnDisconnectedAsync(exception);
         }

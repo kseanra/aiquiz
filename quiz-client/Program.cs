@@ -1,9 +1,29 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
 using System.Text.Json;
 
+string? lastPong = null;
+object consoleLock = new();
+int playerCount = 0;
+
+void DrawPongBar()
+{
+    lock (consoleLock)
+    {
+        int origRow = Console.CursorTop;
+        int origCol = Console.CursorLeft;
+        Console.SetCursorPosition(0, 0);
+        Console.Write($"[Last Pong: {lastPong ?? "(none)"}]");
+        Console.Write(new string(' ', ( Console.WindowWidth == 0 ? 40 : Console.WindowWidth ) - (lastPong?.Length ?? 6) - 12)); // Clear rest of line
+        Console.SetCursorPosition(origCol, origRow);
+    }
+}
+
 // See https://aka.ms/new-console-template for more information
 Console.WriteLine("Hello, World!");
 
+Console.Clear();
+DrawPongBar();
+Console.SetCursorPosition(0, 2);
 Console.WriteLine("Connecting to QuizHub...");
 
 var connection = new HubConnectionBuilder()
@@ -11,48 +31,94 @@ var connection = new HubConnectionBuilder()
     .Build();
 
 
-// connection.On("RequestName", async () =>
-// {
-//     Console.Write("Enter your name: ");
-//     var name = Console.ReadLine();
-//     await connection.InvokeAsync("SubmitName", name);
-// });
+connection.On("RequestName", async () =>
+{
+    // Run input in a background task so DrawPongBar can still update
+    _ = Task.Run(async () =>
+    {
+        lock (consoleLock)
+        {
+            int origRow = Console.CursorTop + 8; // Move down one line to avoid overwriting Pong bar
+            int origCol = Console.CursorLeft;
+            var enterNameMessage = "Please enter your name to join the quiz:";
+            Console.SetCursorPosition(0, origRow); // Place input below player list
+            Console.Write(enterNameMessage);
+            Console.SetCursorPosition(enterNameMessage.Length + 1, origRow);
+        }
+        string? name = Console.ReadLine();
+        await connection.InvokeAsync("SubmitName", name);
+    });
+});
 
-// connection.On<string>("ReceiveQuestion", async (question) =>
-// {
-//     Console.WriteLine($"Question: {question}");
-//     Console.Write("Your answer: ");
-//     var answer = Console.ReadLine();
-//     await connection.InvokeAsync("SubmitAnswer", answer);
-// });
+connection.On<string>("ReceiveQuestion", async (question) =>
+{
+    _ = Task.Run(() =>
+    {
+        lock (consoleLock)
+        {
+            var enterNameMessage = $"Question: {question}";
+            int origRow = Console.CursorTop;
+            int origCol = Console.CursorLeft;
+            Console.SetCursorPosition(0, origRow);
+            Console.Write(enterNameMessage);
+            Console.SetCursorPosition(enterNameMessage.Length + 1, origRow);
+        }
+    });
+    var answer = Console.ReadLine();
+    await connection.InvokeAsync("SubmitAnswer", answer);
+});
 
-// connection.On<string>("GameOver", (winnerId) =>
-// {
-//     Console.WriteLine($"Game over! Winner: {winnerId}");
-//     Environment.Exit(0);
-// });
+connection.On<string>("GameOver", (winnerId) =>
+{
+    _ = Task.Run(() =>
+    {
+        lock (consoleLock)
+        {
+            int origRow = Console.CursorTop;
+            int origCol = Console.CursorLeft;
+            Console.SetCursorPosition(0, origRow);
+            Console.WriteLine("Game Over!");
+            Console.WriteLine($"Winner: {winnerId}");
+            Console.WriteLine("Press any key to exit...");
+        }
+        Console.ReadKey();
+    });
+});
 
 connection.On<IEnumerable<PlayerState>>("PlayersStatus", (players) =>
 {
-    foreach (var player in players)
+    lock (consoleLock)
     {
-        if (player.Disconnected)
+        int origRow = Console.CursorTop;
+        int origCol = Console.CursorLeft;
+        Console.SetCursorPosition(0, 4);
+        Console.WriteLine("--- Player Status ---");
+        int line = 5;
+        playerCount = players.Count();
+        foreach (var player in players)
         {
-            Console.WriteLine($"Player {player.Name ?? "(unnamed)"} has disconnected.");
-            continue;
+            Console.SetCursorPosition(0, line++);
+            if (player.Disconnected)
+                Console.WriteLine($"Player {player.Name ?? "(unnamed)"} has disconnected.   ".PadRight(Console.WindowWidth - 1));
+            else if (player.JustJoined)
+                Console.WriteLine($"Player {player.Name ?? "(unnamed)"} has just joined.   ".PadRight(Console.WindowWidth - 1));
+            else
+                Console.WriteLine($"Player: {player.Name ?? "(unnamed)"}, Question #: {player.CurrentQuestionIndex + 1}   ".PadRight(Console.WindowWidth - 1));
         }
-        else if (player.JustJoined)
-        {
-            Console.WriteLine($"Player {player.Name ?? "(unnamed)"} has just joined.");
-            continue;
-        }
-        Console.WriteLine($"Player: {player.Name ?? "(unnamed)"}, Question #: {player.CurrentQuestionIndex + 1}");
+        // Clear any extra lines from previous output
+        // for (; line < playerCount + 5; line++)
+        // {
+        //     Console.SetCursorPosition(0, line);
+        //     Console.Write(new string(' ', Console.WindowWidth));
+        // }
+        Console.SetCursorPosition(origCol, origRow);
     }
 });
 
 connection.On<DateTime>("Pong", (serverTime) =>
 {
-    //Console.WriteLine($"Pong received from server at {serverTime:O}");
+    lastPong = serverTime.ToString("O");
+    DrawPongBar();
 });
 
 // Example: send a ping every 10 seconds in the background
@@ -66,7 +132,7 @@ _ = Task.Run(async () =>
 });
 
 await connection.StartAsync();
-Console.WriteLine("Connected! Waiting for questions...");
+//Console.WriteLine("Connected! Waiting for questions...");
 
 await Task.Delay(-1); // Keep the app running
 
