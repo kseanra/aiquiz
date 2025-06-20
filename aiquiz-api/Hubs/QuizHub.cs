@@ -34,10 +34,17 @@ namespace aiquiz_api.Hubs
         {
             var player = Players[Context.ConnectionId];
             player.CurrentQuestionIndex = 0;
+            player.Status = PlayerStatus.ReadyForGame;
 
             // Notify all players about everyone's status
-            var playerStates = Players.Select(p => new PlayerState() { Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key, Status = PlayerStatus.ReadyForGame }).ToList();
+            var playerStates = Players.Select(p => new PlayerState() { Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key, Status = p.Value.Status }).ToList();
             await Clients.All.SendAsync("PlayersStatus", playerStates);
+
+            // If all players are ReadyForGame, send event to all
+            if (Players.Count > 0 && Players.All(p => p.Value.Status == PlayerStatus.ReadyForGame))
+            {
+                await Clients.All.SendAsync("GameReady");
+            }
 
             // Send the first question to the player
             await Clients.Caller.SendAsync("ReceiveQuestion", Questions[player.CurrentQuestionIndex]);
