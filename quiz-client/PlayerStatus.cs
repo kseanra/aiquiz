@@ -1,5 +1,3 @@
-namespace aiquiz_api.Models;
-
 public class PlayerState
 {
     public string? ConnectionId { get; set; }

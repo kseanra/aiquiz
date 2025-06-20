@@ -19,22 +19,21 @@ namespace aiquiz_api.Hubs
             await base.OnConnectedAsync();
         }
 
-        
         public async Task SubmitName(string name)
         {
             var player = Players[Context.ConnectionId];
             player.Name = name;
-            await Clients.Caller.SendAsync("ReceiveQuestion", Questions[0]);
-            // Notify all players about the new player and everyone's status
+            player.Status = PlayerStatus.JustJoined;
             var playerStates = Players.Select(p => new PlayerState() { Name = p.Value.Name, CurrentQuestionIndex = 0, ConnectionId = p.Key }).ToList();
             await Clients.All.SendAsync("PlayersStatus", playerStates);
+            await Clients.All.SendAsync("ReadyForGame", playerStates);
         }
         
-        public async Task RadyForGame()
+        public async Task ReadyForGame(bool isReady)
         {
             var player = Players[Context.ConnectionId];
             player.CurrentQuestionIndex = 0;
-            player.Status = PlayerStatus.ReadyForGame;
+            player.Status = isReady? PlayerStatus.ReadyForGame : PlayerStatus.WaitingForGame;
 
             // Notify all players about everyone's status
             var playerStates = Players.Select(p => new PlayerState() { Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key, Status = p.Value.Status }).ToList();
@@ -47,7 +46,7 @@ namespace aiquiz_api.Hubs
             }
 
             // Send the first question to the player
-            await Clients.Caller.SendAsync("ReceiveQuestion", Questions[player.CurrentQuestionIndex]);
+            await Clients.All.SendAsync("GameStarted", Questions[player.CurrentQuestionIndex]);
         }
 
         public async Task SubmitAnswer(string answer)
@@ -58,10 +57,11 @@ namespace aiquiz_api.Hubs
             // Notify all players about everyone's status after answer
             var playerStates = Players.Select(p => new PlayerState() { Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key }).ToList();
             await Clients.All.SendAsync("PlayersStatus", playerStates);
-
-            if (player.CurrentQuestionIndex >= TotalQuestions)
+            
+            if (player.CurrentQuestionIndex >= TotalQuestions && HaveGameWinner())
             {
-                await Clients.All.SendAsync("GameOver", Context.ConnectionId);
+                SetCurrentPlayerAsGameWinner();
+                await Clients.All.SendAsync("GameOver", playerStates);
             }
             else
             {
@@ -81,6 +81,21 @@ namespace aiquiz_api.Hubs
             var playerStates = Players.Select(p => new PlayerState(){ Name = p.Value.Name, CurrentQuestionIndex = p.Value.CurrentQuestionIndex, ConnectionId = p.Key, Status = PlayerStatus.Disconnected }).ToList();
             await Clients.All.SendAsync("PlayersStatus", playerStates);
             await base.OnDisconnectedAsync(exception);
+        }
+
+        // Returns true if any player's status is GameOver
+        private bool HaveGameWinner()
+        {
+            return Players.Values.Any(p => p.Status == PlayerStatus.GameWinner);
+        }
+
+        // Set the current player as the game winner
+        private void SetCurrentPlayerAsGameWinner()
+        {
+            if (Players.TryGetValue(Context.ConnectionId, out var player))
+            {
+                player.Status = PlayerStatus.GameWinner;
+            }
         }
     }
 }

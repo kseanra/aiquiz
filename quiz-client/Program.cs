@@ -30,8 +30,8 @@ var connection = new HubConnectionBuilder()
     .WithUrl("http://localhost:5000/quizhub") // Change port if your API runs on a different port
     .Build();
 
-
-connection.On("RequestName", async () =>
+// Inputt user name
+connection.On("RequestName", () =>
 {
     // Run input in a background task so DrawPongBar can still update
     _ = Task.Run(async () =>
@@ -85,6 +85,24 @@ connection.On<string>("GameOver", (winnerId) =>
     });
 });
 
+connection.On<IEnumerable<PlayerState>>("ReadyForGame", async (ready) =>
+{
+    _ = Task.Run(() =>
+    {
+        lock (consoleLock)
+        {
+            var enterNameMessage = $"Ready for game (y/n):";
+            int origRow = Console.CursorTop;
+            int origCol = Console.CursorLeft;
+            Console.SetCursorPosition(0, origRow);
+            Console.Write(enterNameMessage);
+            Console.SetCursorPosition(enterNameMessage.Length + 1, origRow);
+        }
+    });
+    var answer = Console.ReadLine();
+    await connection.InvokeAsync("ReadyForGame", string.Equals("y", answer, StringComparison.OrdinalIgnoreCase) ? true : false  );
+});
+
 connection.On<IEnumerable<PlayerState>>("PlayersStatus", (players) =>
 {
     lock (consoleLock)
@@ -98,12 +116,7 @@ connection.On<IEnumerable<PlayerState>>("PlayersStatus", (players) =>
         foreach (var player in players)
         {
             Console.SetCursorPosition(0, line++);
-            if (player.Disconnected)
-                Console.WriteLine($"Player {player.Name ?? "(unnamed)"} has disconnected.   ".PadRight(Console.WindowWidth - 1));
-            else if (player.JustJoined)
-                Console.WriteLine($"Player {player.Name ?? "(unnamed)"} has just joined.   ".PadRight(Console.WindowWidth - 1));
-            else
-                Console.WriteLine($"Player: {player.Name ?? "(unnamed)"}, Question #: {player.CurrentQuestionIndex + 1}   ".PadRight(Console.WindowWidth - 1));
+            Console.WriteLine($"Player: {player.Name ?? "(unnamed)"}, Status: {player.Status}   ".PadRight(Console.WindowWidth - 1));
         }
         // Clear any extra lines from previous output
         // for (; line < playerCount + 5; line++)
@@ -113,6 +126,24 @@ connection.On<IEnumerable<PlayerState>>("PlayersStatus", (players) =>
         // }
         Console.SetCursorPosition(origCol, origRow);
     }
+});
+
+connection.On<string>("GameStarted", async (question) =>
+{
+    _ = Task.Run(() =>
+    {
+        lock (consoleLock)
+        {
+            var enterNameMessage = $"Question: {question}";
+            int origRow = Console.CursorTop;
+            int origCol = Console.CursorLeft;
+            Console.SetCursorPosition(0, origRow);
+            Console.Write(enterNameMessage);
+            Console.SetCursorPosition(enterNameMessage.Length + 1, origRow);
+        }
+    });
+    var answer = Console.ReadLine();
+    await connection.InvokeAsync("SubmitAnswer", answer);
 });
 
 connection.On<DateTime>("Pong", (serverTime) =>
@@ -132,15 +163,5 @@ _ = Task.Run(async () =>
 });
 
 await connection.StartAsync();
-//Console.WriteLine("Connected! Waiting for questions...");
 
 await Task.Delay(-1); // Keep the app running
-
-public class PlayerState
-{
-    public string? ConnectionId { get; set; }
-    public string? Name { get; set; }
-    public int CurrentQuestionIndex { get; set; }
-    public bool Disconnected { get; set; } = false; // Indicates if the player is disconnected
-    public bool JustJoined { get; set; } = false; // Indicates if the player just joine
-}

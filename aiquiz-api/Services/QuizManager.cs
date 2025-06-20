@@ -15,9 +15,9 @@ namespace aiquiz_api.Services
         public QuizManager(IConfiguration configuration)
         {
             var azureConfig = configuration.GetSection("AzureOpenAI");
-            var endpointStr = azureConfig["Endpoint"] ?? string.Empty;
-            var deploymentName = azureConfig["DeploymentName"] ?? string.Empty;
-            var apiKey = azureConfig["ApiKey"] ?? string.Empty;
+            var endpointStr =  Environment.GetEnvironmentVariable("AzureOpenAIEndpoint") ??  azureConfig["Endpoint"] ;
+            var deploymentName = Environment.GetEnvironmentVariable("DeploymentName") ?? azureConfig["DeploymentName"];
+            var apiKey = Environment.GetEnvironmentVariable("ApiKey") ?? azureConfig["ApiKey"];
 
             if (string.IsNullOrWhiteSpace(endpointStr) || string.IsNullOrWhiteSpace(deploymentName) || string.IsNullOrWhiteSpace(apiKey))
             {
