@@ -32,7 +32,7 @@ namespace aiquiz_api.Hubs
             var player = Players[Context.ConnectionId];
             player.Name = name;
             player.Status = PlayerStatus.JustJoined;
-            _logger.LogInformation("Player {Name} is {Status}", player.Name, player.Status);
+            _logger.LogInformation("Player {ConnectionId} {Name} is {Status}", player.ConnectionId, player.Name, player.Status);
             await Clients.Caller.SendAsync("ReadyForGame", GetPlayerStates());
         }
 
@@ -40,7 +40,7 @@ namespace aiquiz_api.Hubs
         {
             var player = Players[Context.ConnectionId];
             player.Status = isReady ? PlayerStatus.ReadyForGame : PlayerStatus.WaitingForGame;
-            _logger.LogInformation("Player {Name} is {Status}", player.Name, player.Status);
+            _logger.LogInformation("Player {ConnectionId} {Name} is {Status}", player.ConnectionId, player.Name, player.Status);
 
             // If all players are ReadyForGame, send event to all
             if (AllPlayersReady())
@@ -58,7 +58,7 @@ namespace aiquiz_api.Hubs
         {
             var player = Players[Context.ConnectionId];
 
-            _logger.LogInformation("Player {Name} submitted answer: {Answer} for question index: {Index}", player.Name, answer, player.CurrentQuestionIndex);
+            _logger.LogInformation("Player {ConnectionId} {Name} submitted answer: {Answer} for question index: {Index}", player.ConnectionId, player.Name, answer, player.CurrentQuestionIndex);
             /// TODO: Notify all players about everyone's status
 
             if (IsLastQuestion(player) && !HaveGameWinner())
@@ -75,8 +75,8 @@ namespace aiquiz_api.Hubs
                 {
                     player.CurrentQuestionIndex++;
                     var question = Questions[player.CurrentQuestionIndex];
-                    _logger.LogInformation("Send new question to Player {Name} : {Index}", player.Name, question);
-                    await Clients.Caller.SendAsync("ReceiveQuestion", question);
+                    _logger.LogInformation("Send new question to Player {ConnectionId} {Name} : {Index}", player.ConnectionId, player.Name, question);
+                    await SendQuestionToPlayer("ReceiveQuestion", question);
                 }
             }
             /// Notify all players about everyone's status
@@ -93,9 +93,6 @@ namespace aiquiz_api.Hubs
             var player = Players[Context.ConnectionId];
             _logger.LogInformation("Client disconnected: {ConnectionId}, Player: {Name}", Context.ConnectionId, player.Name);
             Players.TryRemove(Context.ConnectionId, out _);
-
-            /// Notify all players about everyone's status
-            await NotifyAllPlayer("PlayersStatus");
             await base.OnDisconnectedAsync(exception);
         }
 
@@ -128,7 +125,7 @@ namespace aiquiz_api.Hubs
 
             foreach (var player in players)
             {
-                _logger.LogInformation("Current Players Status: {Name} : {PlayersStatus}", player.Name, player.Status);
+                _logger.LogInformation("Current Players Status: {ConnectionId} {Name} : {PlayersStatus}", player.ConnectionId, player.Name, player.Status);
             }
 
             return players;
@@ -157,7 +154,7 @@ namespace aiquiz_api.Hubs
                 _logger.LogInformation("Send Question to Player {Name} : {Index}", player.Name, question);
             }
         }
-        
+
         private async Task StartGame(string question)
         {
             if (Players.TryGetValue(Context.ConnectionId, out var player))
@@ -166,5 +163,7 @@ namespace aiquiz_api.Hubs
                 _logger.LogInformation("Send Question to Player {Name} : {Index}", player.Name, question);
             }
         }
+        
+        
     }
 }

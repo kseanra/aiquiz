@@ -4,6 +4,8 @@ using System.Text.Json;
 string? lastPong = null;
 object consoleLock = new();
 int playerCount = 0;
+int defaultQuestionStartRow = 15;
+int currentQuestionStartRow = 15;
 
 void DrawPongBar()
 {
@@ -82,40 +84,7 @@ async Task<string> ReadUserInputAsync(string prompt, int? defaultOrigRow = defau
 
     await Task.Run(() =>
     {
-        userInput = "";
-        bool inputComplete = false;
-        while (!inputComplete)
-        {
-            if (Console.KeyAvailable)
-            {
-                var key = Console.ReadKey(intercept: true);
-                if (key.Key == ConsoleKey.Enter)
-                {
-                    inputComplete = true;
-                }
-                else if (key.Key == ConsoleKey.Backspace && userInput.Length > 0)
-                {
-                    userInput = userInput.Substring(0, userInput.Length - 1);
-                    lock (consoleLock)
-                    {
-                        Console.SetCursorPosition(0, Console.CursorTop);
-                        Console.Write(new string(' ', Console.WindowWidth));
-                        Console.SetCursorPosition(0, Console.CursorTop);
-                        Console.Write(prompt + " " + userInput);
-                        Console.SetCursorPosition(prompt.Length + 1 + userInput.Length, Console.CursorTop);
-                    }
-                }
-                else if (!char.IsControl(key.KeyChar))
-                {
-                    userInput += key.KeyChar;
-                    lock (consoleLock)
-                    {
-                        Console.Write(key.KeyChar);
-                    }
-                }
-            }
-            Thread.Sleep(50); // Reduce CPU usage
-        }
+        userInput = Console.ReadLine() ?? string.Empty;
     });
 
     return userInput;
@@ -125,76 +94,72 @@ connection.On("RequestName", () =>
 {
     _ = Task.Run(async () =>
     {
-        string? name = await ReadUserInputAsync("Please enter your name to join the quiz:", Console.CursorTop + 8);
+        string? name = await ReadUserInputAsync("Please enter your name to join the quiz:", 11);
         await connection.InvokeAsync("SubmitName", name);
     });
 });
 
-connection.On<IEnumerable<PlayerState>>("ReadyForGame", async (ready) =>
+connection.On<IEnumerable<PlayerState>>("ReadyForGame", (ready) =>
 {
     _ = Task.Run(async () =>
     {
-        string answer = await ReadUserInputAsync("Ready for game (y/n):", Console.CursorTop + 1);
+        string answer = await ReadUserInputAsync("Ready for game (y/n):", 12);
         await connection.InvokeAsync("ReadyForGame", string.Equals("y", answer, StringComparison.OrdinalIgnoreCase));
     });
 });
 
 
-connection.On<string?>("ReceiveQuestion", async (question) =>
+connection.On<string?>("ReceiveQuestion", (question) =>
 {
     _ = Task.Run(async () =>
     {
-        string answer = await ReadUserInputAsync($"Question: {question}", Console.CursorTop + 1);
+        string answer = await ReadUserInputAsync($"Question: {question}", currentQuestionStartRow++);
         await connection.InvokeAsync("SubmitAnswer", answer);
     });
 });
 
-connection.On<string>("GameStarted", async (question) =>
+connection.On<string>("GameStarted", (question) =>
 {
     _ = Task.Run(async () =>
     {
-        string answer = await ReadUserInputAsync($"Question: {question}", Console.CursorTop + 1);
+        string answer = await ReadUserInputAsync($"Question: {question}", defaultQuestionStartRow);
         await connection.InvokeAsync("SubmitAnswer", answer);
 
     });
 });
 
-connection.On<IEnumerable<PlayerState>>("GameOver", async (players) =>
+connection.On<IEnumerable<PlayerState>>("GameOver", (players) =>
 {
     _ = Task.Run(async () =>
     {
         DisplayPlayerStatusAsync(players);
         await connection.StopAsync();
         Thread.Sleep(2000); // Give time to read the game over message
+        currentQuestionStartRow = 15;
         lock (consoleLock)
         {
             Console.Clear();
-            Console.WriteLine("Game Over! Press any key for next game...");
+            Console.SetCursorPosition(0, 0);
         }
-        await connection.StartAsync();
+
+        System.Diagnostics.Process.Start(Environment.ProcessPath!);
+        Environment.Exit(0);
+    
     });
 });
 
 connection.On<IEnumerable<PlayerState>>("PlayersStatus", (players) =>
 {
-    _ = Task.Run(async () =>
+    _ = Task.Run(() =>
     {
         DisplayPlayerStatusAsync(players);
     });
 });
 
-connection.On<string>("GameStarted", async (question) =>
-{
-    _ = Task.Run(async () =>
-    {
-        string answer = await ReadUserInputAsync($"Question: {question}");
-        await connection.InvokeAsync("SubmitAnswer", answer);
-    });
-});
 
 connection.On<DateTime>("Pong", (serverTime) =>
 {
-    _ = Task.Run(async () =>
+    _ = Task.Run(() =>
     {
         lastPong = serverTime.ToString("O");
         DrawPongBar();
