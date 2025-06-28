@@ -7,7 +7,7 @@ namespace aiquiz_api.Hubs
 {
     public class QuizHub : Hub
     {
-        private static int TotlaParticipants = 2;
+        private static int TotlaParticipants = 1;
         private static ConcurrentDictionary<string, PlayerState> Players = new();
         private static readonly List<string> Questions = new() { "Q1", "Q2", "Q3" };
         private const int TotalQuestions = 3;

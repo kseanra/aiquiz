@@ -9,6 +9,8 @@ function App() {
   const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
   const [lastPong, setLastPong] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
+  const [question, setQuestion] = useState<string | null>(null); // New state for question
+  const [answer, setAnswer] = useState(''); // New state for answer input
 
   const handleConnect = async () => {
     if (!name) return;
@@ -18,7 +20,7 @@ function App() {
       .build();
 
     conn.on("ReceiveQuestion", (question: string) => {
-      alert("Received question: " + question);
+      setQuestion(question); // Set question in state
     });
 
     conn.on("Pong", (serverTime: string) => {
@@ -45,7 +47,7 @@ function App() {
 
   const handleReady = async () => {
     if (connection) {
-      await connection.invoke("ReadyForGame");
+      await connection.invoke("ReadyForGame", true);
       setReady(true);
     }
   };
@@ -82,6 +84,32 @@ function App() {
             <button onClick={handleReady} disabled={ready} style={{ marginTop: 16 }}>
               {ready ? 'Ready!' : 'I am Ready'}
             </button>
+            {question && (
+              <div style={{ marginTop: 24, padding: 16, background: '#f9f9f9', borderRadius: 8 }}>
+                <strong>Question:</strong> {question}
+                <form
+                  onSubmit={async e => {
+                    e.preventDefault();
+                    if (connection && answer.trim()) {
+                      await connection.invoke("SubmitAnswer", answer);
+                      setAnswer('');
+                    }
+                  }}
+                  style={{ marginTop: 16 }}
+                >
+                  <input
+                    type="text"
+                    value={answer}
+                    onChange={e => setAnswer(e.target.value)}
+                    placeholder="Your answer"
+                    style={{ marginRight: 8 }}
+                  />
+                  <button type="submit" disabled={!answer.trim()}>
+                    Submit Answer
+                  </button>
+                </form>
+              </div>
+            )}
           </div>
         )}
       </div>
