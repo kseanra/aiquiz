@@ -11,6 +11,36 @@ function App() {
   const [ready, setReady] = useState(false);
   const [question, setQuestion] = useState<string | null>(null); // New state for question
   const [answer, setAnswer] = useState(''); // New state for answer input
+  const [playerStates, setPlayerStates] = useState<any[]>([]); // State for player statuses
+
+  // Map status code to string
+  const statusToString = (status: any) => {
+    switch (status) {
+      case 0:
+      case 'JustJoined':
+        return 'Just Joined';
+      case 1:
+      case 'Active':
+        return 'Active';
+      case 2:
+      case 'Disconnected':
+        return 'Disconnected';
+      case 3:
+      case 'ReadyForGame':
+        return 'Ready for Game';
+      case 4:
+      case 'GameOver':
+        return 'Game Over';
+      case 5:
+      case 'WaitingForGame':
+        return 'Waiting for Game';
+      case 6:
+      case 'GameWinner':
+        return 'Game Winner';
+      default:
+        return String(status);
+    }
+  };
 
   const handleConnect = async () => {
     if (!name) return;
@@ -21,6 +51,10 @@ function App() {
 
     conn.on("ReceiveQuestion", (question: string) => {
       setQuestion(question); // Set question in state
+    });
+
+    conn.on("PlayersStatus", (players: any[]) => {
+      setPlayerStates(players);
     });
 
     conn.on("Pong", (serverTime: string) => {
@@ -81,6 +115,19 @@ function App() {
         ) : (
           <div>
             <h2>Welcome, {name}! Connected to the game room.</h2>
+            {/* Player Status List */}
+            {playerStates.length > 0 && (
+              <div style={{ margin: '16px 0', padding: 12, background: '#e6f7ff', borderRadius: 8 }}>
+                <strong>Player Status:</strong>
+                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                  {playerStates.map((p, idx) => (
+                    <li key={p.connectionId || idx}>
+                      {p.name || 'Anonymous'}: {statusToString(p.status)} (Question #{(p.currentQuestionIndex ?? 0) + 1})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <button onClick={handleReady} disabled={ready} style={{ marginTop: 16 }}>
               {ready ? 'Ready!' : 'I am Ready'}
             </button>
