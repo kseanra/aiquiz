@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 using aiquiz_api.Models;
 using Microsoft.Extensions.Logging;
+using aiquiz_api.Services;
 
 namespace aiquiz_api.Hubs
 {
@@ -9,13 +10,16 @@ namespace aiquiz_api.Hubs
     {
         private static int TotlaParticipants = 1;
         private static ConcurrentDictionary<string, PlayerState> Players = new();
-        private static readonly List<string> Questions = new() { "Q1", "Q2", "Q3" };
-        private const int TotalQuestions = 3;
+        private static List<Quiz> Questions = new(); // Use Quiz objects
+        private static string CurrentTopic = "general knowledge";
+        private static int TotalQuestions => Questions.Count;
         private readonly ILogger<QuizHub> _logger;
+        private readonly QuizManager _quizManager;
 
-        public QuizHub(ILogger<QuizHub> logger)
+        public QuizHub(ILogger<QuizHub> logger, QuizManager quizManager)
         {
             _logger = logger;
+            _quizManager = quizManager;
         }
 
         public override async Task OnConnectedAsync()
@@ -42,13 +46,17 @@ namespace aiquiz_api.Hubs
             player.Status = isReady ? PlayerStatus.ReadyForGame : PlayerStatus.WaitingForGame;
             _logger.LogInformation("Player {ConnectionId} {Name} is {Status}", player.ConnectionId, player.Name, player.Status);
 
-            // If all players are ReadyForGame, send event to all
+            // If all players are ReadyForGame, generate questions and send event to all
             if (AllPlayersReady())
             {
-                var question = Questions[player.CurrentQuestionIndex];
+                if (Questions.Count == 0) // Only generate once per game
+                {
+                    Questions = await _quizManager.GenerateQuizAsync(CurrentTopic);
+                }
+                var question = Questions.Count > 0 ? Questions[0] : null;
                 _logger.LogInformation("All Players are ready for the game");
                 await StartGame(question);
-                _logger.LogInformation("Send Quesion : {Index} to All Players.", question);
+                _logger.LogInformation("Send Question : {Index} to All Players.", question);
             }
 
             await NotifyAllPlayer("PlayersStatus");
@@ -73,10 +81,10 @@ namespace aiquiz_api.Hubs
                 // Send the next question to the player
                 if (player.CurrentQuestionIndex < TotalQuestions - 1)
                 {
-                    player.CurrentQuestionIndex++;
-                    var question = Questions[player.CurrentQuestionIndex];
-                    _logger.LogInformation("Send new question to Player {ConnectionId} {Name} : {Index}", player.ConnectionId, player.Name, question);
-                    await SendQuestionToPlayer("ReceiveQuestion", question);
+                    player.CurrentQuestionIndex++; 
+                    _logger.LogInformation("Send new question to Player {ConnectionId} {Name} : {Index}", player.ConnectionId, player.Name, player.CurrentQuestionIndex);
+                    // Send the next question to the player
+                    await SendQuestionToPlayer("ReceiveQuestion", Questions[player.CurrentQuestionIndex]);
                 }
             }
             /// Notify all players about everyone's status
@@ -146,8 +154,13 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        private async Task SendQuestionToPlayer(string method, string question)
+        private async Task SendQuestionToPlayer(string method, Quiz? question)
         {
+            if(question == null)
+            {
+                _logger.LogWarning("Question is null, cannot send to player.");
+                return;
+            }
             if (Players.TryGetValue(Context.ConnectionId, out var player))
             {
                 await Clients.Caller.SendAsync(method, question);
@@ -155,15 +168,24 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        private async Task StartGame(string question)
+        private async Task StartGame(Quiz question)
         {
+           await SendNextQuestion(question);
+        }
+
+        private async Task SendNextQuestion(Quiz question)
+        {
+            if (question == null)
+            {
+                _logger.LogWarning("No question available to start the game.");
+                return;
+            }
+
             if (Players.TryGetValue(Context.ConnectionId, out var player))
             {
                 await Clients.All.SendAsync("ReceiveQuestion", question);
                 _logger.LogInformation("Send Question to Player {Name} : {Index}", player.Name, question);
             }
         }
-        
-        
     }
 }

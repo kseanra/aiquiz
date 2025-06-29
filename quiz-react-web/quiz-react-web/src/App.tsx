@@ -9,8 +9,8 @@ function App() {
   const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
   const [lastPong, setLastPong] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [question, setQuestion] = useState<string | null>(null); // New state for question
-  const [answer, setAnswer] = useState(''); // New state for answer input
+  const [question, setQuestion] = useState<any | null>(null); // Now stores Quiz object
+  const [selectedOption, setSelectedOption] = useState<string>(''); // For radio selection
   const [playerStates, setPlayerStates] = useState<any[]>([]); // State for player statuses
 
   // Map status code to string
@@ -49,8 +49,8 @@ function App() {
       .withAutomaticReconnect()
       .build();
 
-    conn.on("ReceiveQuestion", (question: string) => {
-      setQuestion(question); // Set question in state
+    conn.on("ReceiveQuestion", (quiz: any) => {
+      setQuestion(quiz); // Set Quiz object in state
     });
 
     conn.on("PlayersStatus", (players: any[]) => {
@@ -133,25 +133,35 @@ function App() {
             </button>
             {question && (
               <div style={{ marginTop: 24, padding: 16, background: '#f9f9f9', borderRadius: 8 }}>
-                <strong>Question:</strong> {question}
+                <strong>Question:</strong> {question.question}
                 <form
                   onSubmit={async e => {
                     e.preventDefault();
-                    if (connection && answer.trim()) {
-                      await connection.invoke("SubmitAnswer", answer);
-                      setAnswer('');
+                    if (connection && selectedOption) {
+                      await connection.invoke("SubmitAnswer", selectedOption);
+                      setSelectedOption('');
                     }
                   }}
                   style={{ marginTop: 16 }}
                 >
-                  <input
-                    type="text"
-                    value={answer}
-                    onChange={e => setAnswer(e.target.value)}
-                    placeholder="Your answer"
-                    style={{ marginRight: 8 }}
-                  />
-                  <button type="submit" disabled={!answer.trim()}>
+                  <ul style={{ marginTop: 12, listStyle: 'none', padding: 0 }}>
+                    {question.options && question.options.map((opt: string, idx: number) => (
+                      <li key={idx} style={{ marginBottom: 8 }}>
+                        <label>
+                          <input
+                            type="radio"
+                            name="quizOption"
+                            value={opt}
+                            checked={selectedOption === opt}
+                            onChange={() => setSelectedOption(opt)}
+                            style={{ marginRight: 8 }}
+                          />
+                          {opt}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                  <button type="submit" disabled={!selectedOption}>
                     Submit Answer
                   </button>
                 </form>
