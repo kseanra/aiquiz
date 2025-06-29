@@ -168,9 +168,14 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        private async Task StartGame(Quiz question)
+        private async Task StartGame(Quiz? question)
         {
-           await SendNextQuestion(question);
+            if(question == null)
+            {
+                _logger.LogWarning("No question available to start the game.");
+                return;
+            }
+            await SendNextQuestion(question);
         }
 
         private async Task SendNextQuestion(Quiz question)
