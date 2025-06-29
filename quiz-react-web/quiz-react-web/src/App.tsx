@@ -48,7 +48,7 @@ function App() {
     if (!name) return;
     const conn = new signalR.HubConnectionBuilder()
       .withUrl(HUB_URL)
-      .withAutomaticReconnect()
+      // .withAutomaticReconnect()
       .build();
 
     conn.on("ReceiveQuestion", (quiz: any) => {
@@ -71,6 +71,10 @@ function App() {
       // Find winner
       const winner = players.find((p: any) => p.status === 6 || p.status === 'GameWinner');
       setWinnerName(winner ? winner.name : null);
+      // // Disconnect after game over
+      // setTimeout(() => {
+      //   conn.stop();
+      // }, 500); // Give a short delay to allow UI update
     });
 
     try {
@@ -81,7 +85,8 @@ function App() {
       setReady(false);
       // Start pinging every 1 second
       setInterval(() => {
-        conn.invoke("Ping");
+        if(!conn || conn.state !== signalR.HubConnectionState.Connected) return;
+          conn.invoke("Ping");
       }, 1000);
     } catch (error) {
       console.error("Connection failed: ", error);
@@ -96,6 +101,21 @@ function App() {
       await connection.invoke("ReadyForGame", true);
       setReady(true);
     }
+  };
+
+  const handleExit = async () => {
+    if (connection) {
+      await connection.stop();
+    }
+    setConnected(false);
+    setConnection(null);
+    setReady(false);
+    setQuestion(null);
+    setSelectedOption('');
+    setPlayerStates([]);
+    setGameOver(false);
+    setWinnerName(null);
+    setName('');
   };
 
   return (
@@ -140,13 +160,19 @@ function App() {
                 </ul>
               </div>
             )}
-            <button onClick={handleReady} disabled={ready} style={{ marginTop: 16 }}>
-              {ready ? 'Ready!' : 'I am Ready'}
-            </button>
+            {/* Hide Ready button after click */}
+            {!ready && (
+              <button onClick={handleReady} style={{ marginTop: 16 }}>
+                I am Ready
+              </button>
+            )}
             {gameOver ? (
               <div style={{ marginTop: 24, padding: 16, background: '#ffecec', borderRadius: 8 }}>
                 <strong>Game Over!</strong><br />
                 {winnerName ? `Winner: ${winnerName}` : 'No winner.'}
+                <div style={{ marginTop: 16 }}>
+                  <button onClick={handleExit}>Exit</button>
+                </div>
               </div>
             ) : question && (
               <div style={{ marginTop: 24, padding: 16, background: '#f9f9f9', borderRadius: 8 }}>

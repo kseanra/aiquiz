@@ -33,7 +33,7 @@ namespace aiquiz_api.Services
         {
             List<ChatMessage> messages = new List<ChatMessage>()
             {
-                new UserChatMessage($"Generate 4 quizs about {topic}?, with 4 options and the correct answer. Only return json serialized string of object {{ Question: string,  Options: string[] Answer: string. }}"),
+                new UserChatMessage($"Generate 4 quizs about {topic}?, with 4 options and the correct answer. Only return json serialized string of object {{ Question: string,  Options: string[] Answer: string. }}, Each time I run this, the questions should be different."),
             };
 
             var response = await _chatClient.CompleteChatAsync(messages);
