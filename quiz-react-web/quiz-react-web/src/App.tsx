@@ -12,6 +12,8 @@ function App() {
   const [question, setQuestion] = useState<any | null>(null); // Now stores Quiz object
   const [selectedOption, setSelectedOption] = useState<string>(''); // For radio selection
   const [playerStates, setPlayerStates] = useState<any[]>([]); // State for player statuses
+  const [gameOver, setGameOver] = useState(false);
+  const [winnerName, setWinnerName] = useState<string | null>(null);
 
   // Map status code to string
   const statusToString = (status: any) => {
@@ -59,6 +61,16 @@ function App() {
 
     conn.on("Pong", (serverTime: string) => {
       setLastPong(serverTime);
+    });
+
+    conn.on("GameOver", (players: any[]) => {
+      setGameOver(true);
+      setQuestion(null);
+      setSelectedOption('');
+      setPlayerStates(players);
+      // Find winner
+      const winner = players.find((p: any) => p.status === 6 || p.status === 'GameWinner');
+      setWinnerName(winner ? winner.name : null);
     });
 
     try {
@@ -131,7 +143,12 @@ function App() {
             <button onClick={handleReady} disabled={ready} style={{ marginTop: 16 }}>
               {ready ? 'Ready!' : 'I am Ready'}
             </button>
-            {question && (
+            {gameOver ? (
+              <div style={{ marginTop: 24, padding: 16, background: '#ffecec', borderRadius: 8 }}>
+                <strong>Game Over!</strong><br />
+                {winnerName ? `Winner: ${winnerName}` : 'No winner.'}
+              </div>
+            ) : question && (
               <div style={{ marginTop: 24, padding: 16, background: '#f9f9f9', borderRadius: 8 }}>
                 <strong>Question:</strong> {question.question}
                 <form

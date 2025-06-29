@@ -12,6 +12,9 @@
       "label": "web",
       "type": "shell",
       "command": "npm start",
+      "options": {
+        "cwd": "${workspaceFolder}/quiz-react-web/quiz-react-web"
+      },
       "isBackground": true,
       "problemMatcher": {
         "pattern": [
