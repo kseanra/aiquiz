@@ -14,6 +14,7 @@ function App() {
   const [playerStates, setPlayerStates] = useState<any[]>([]); // State for player statuses
   const [gameOver, setGameOver] = useState(false);
   const [winnerName, setWinnerName] = useState<string | null>(null);
+  const [loadingQuestion, setLoadingQuestion] = useState(false);
 
   // Map status code to string
   const statusToString = (status: any) => {
@@ -53,6 +54,7 @@ function App() {
 
     conn.on("ReceiveQuestion", (quiz: any) => {
       setQuestion(quiz); // Set Quiz object in state
+      setLoadingQuestion(false);
     });
 
     conn.on("PlayersStatus", (players: any[]) => {
@@ -68,6 +70,7 @@ function App() {
       setQuestion(null);
       setSelectedOption('');
       setPlayerStates(players);
+      setLoadingQuestion(false);
       // Find winner
       const winner = players.find((p: any) => p.status === 6 || p.status === 'GameWinner');
       setWinnerName(winner ? winner.name : null);
@@ -98,6 +101,7 @@ function App() {
 
   const handleReady = async () => {
     if (connection) {
+      setLoadingQuestion(true); // Show loading spinner when ready
       await connection.invoke("ReadyForGame", true);
       setReady(true);
     }
@@ -181,8 +185,10 @@ function App() {
                   onSubmit={async e => {
                     e.preventDefault();
                     if (connection && selectedOption) {
+                      setLoadingQuestion(true);
                       await connection.invoke("SubmitAnswer", selectedOption);
                       setSelectedOption('');
+                      // Wait for next question or GameOver event
                     }
                   }}
                   style={{ marginTop: 16 }}
@@ -204,15 +210,28 @@ function App() {
                       </li>
                     ))}
                   </ul>
-                  <button type="submit" disabled={!selectedOption}>
+                  <button type="submit" disabled={!selectedOption || loadingQuestion}>
                     Submit Answer
                   </button>
                 </form>
+                {loadingQuestion && (
+                  <div style={{ marginTop: 16, textAlign: 'center' }}>
+                    <span className="spinner" style={{ display: 'inline-block', width: 32, height: 32, border: '4px solid #ccc', borderTop: '4px solid #333', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                    <div>Waiting for next question...</div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
       </div>
+      {/* Add spinner animation CSS */}
+      <style>{`
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+`}</style>
     </div>
   );
 }
