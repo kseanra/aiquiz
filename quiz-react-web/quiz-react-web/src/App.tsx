@@ -77,24 +77,17 @@ function App() {
       // Find winner
       const winner = players.find((p: any) => p.status === 6 || p.status === 'GameWinner');
       setWinnerName(winner ? winner.name : null);
-      // // Disconnect after game over
-      // setTimeout(() => {
-      //   conn.stop();
-      // }, 500); // Give a short delay to allow UI update
     });
 
     conn.on("IncorrectAnswer", (questionIndex: number) => {
-      if (question && selectedOption) {
-        const idx = question.options.findIndex((opt: string) => opt === selectedOption);
-        setIncorrectIndex(idx);
+        setIncorrectIndex(questionIndex);
         setShowBigCross(true);
+        setLoadingQuestion(false);
         setBlockAnswer(true);
         setTimeout(() => {
           setShowBigCross(false);
           setBlockAnswer(false);
         }, 2000);
-      }
-      setLoadingQuestion(false);
     });
 
     try {
@@ -229,9 +222,6 @@ function App() {
                             disabled={blockAnswer}
                           />
                           {opt}
-                          {incorrectIndex === idx && (
-                            <span style={{ color: 'red', marginLeft: 8, fontSize: 20 }} title="Incorrect">&#10060;</span>
-                          )}
                         </label>
                       </li>
                     ))}
@@ -239,15 +229,15 @@ function App() {
                   <button type="submit" disabled={!selectedOption || loadingQuestion || blockAnswer}>
                     Submit Answer
                   </button>
-                </form>
-                {loadingQuestion && (
+                </form>   
+              </div>
+            )}
+            {loadingQuestion && (
                   <div style={{ marginTop: 16, textAlign: 'center' }}>
                     <span className="spinner" style={{ display: 'inline-block', width: 32, height: 32, border: '4px solid #ccc', borderTop: '4px solid #333', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
                     <div>Waiting for next question...</div>
                   </div>
                 )}
-              </div>
-            )}
           </div>
         )}
       </div>
