@@ -67,27 +67,39 @@ namespace aiquiz_api.Hubs
             var player = Players[Context.ConnectionId];
 
             _logger.LogInformation("Player {ConnectionId} {Name} submitted answer: {Answer} for question index: {Index}", player.ConnectionId, player.Name, answer, player.CurrentQuestionIndex);
-            /// TODO: Notify all players about everyone's status
-
-            if (IsLastQuestion(player) && !HaveGameWinner())
+            // Check if answer is correct for the current question
+            bool isCorrect = false;
+            if (player.CurrentQuestionIndex < Questions.Count)
             {
-                SetCurrentPlayerAsGameWinner();
-                _logger.LogInformation("Game Over, we have a winner: {Name}", player.Name);
-                // Notify all players about everyone's status "GameOver"
-                await NotifyAllPlayer("GameOver");
+                var currentQuestion = Questions[player.CurrentQuestionIndex];
+                isCorrect = string.Equals(answer?.Trim(), currentQuestion.Answer?.Trim(), StringComparison.OrdinalIgnoreCase);
+            }
+
+            if (isCorrect)
+            {
+                _logger.LogInformation("Player {ConnectionId} answered correctly.", player.ConnectionId);
+                // Send the next question if not last question
+                if (player.CurrentQuestionIndex < TotalQuestions - 1)
+                {
+                    player.CurrentQuestionIndex++;
+                    _logger.LogInformation("Send new question to Player {ConnectionId} {Name} : {Index}", player.ConnectionId, player.Name, player.CurrentQuestionIndex);
+                    await SendQuestionToPlayer("ReceiveQuestion", Questions[player.CurrentQuestionIndex]);
+                }
+                else if (!HaveGameWinner())
+                {
+                    SetCurrentPlayerAsGameWinner();
+                    _logger.LogInformation("Game Over, we have a winner: {Name}", player.Name);
+                    await NotifyAllPlayer("GameOver");
+                }
             }
             else
             {
-                // Send the next question to the player
-                if (player.CurrentQuestionIndex < TotalQuestions - 1)
-                {
-                    player.CurrentQuestionIndex++; 
-                    _logger.LogInformation("Send new question to Player {ConnectionId} {Name} : {Index}", player.ConnectionId, player.Name, player.CurrentQuestionIndex);
-                    // Send the next question to the player
-                    await SendQuestionToPlayer("ReceiveQuestion", Questions[player.CurrentQuestionIndex]);
-                }
+                _logger.LogInformation("Player {ConnectionId} answered incorrectly.", player.ConnectionId);
+                // Optionally, you can notify the player or let them retry
+                await Clients.Caller.SendAsync("IncorrectAnswer", player.CurrentQuestionIndex);
             }
-            /// Notify all players about everyone's status
+
+            // Notify all players about everyone's status
             await NotifyAllPlayer("PlayersStatus");
         }
 

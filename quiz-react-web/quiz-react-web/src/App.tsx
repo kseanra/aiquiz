@@ -15,6 +15,9 @@ function App() {
   const [gameOver, setGameOver] = useState(false);
   const [winnerName, setWinnerName] = useState<string | null>(null);
   const [loadingQuestion, setLoadingQuestion] = useState(false);
+  const [incorrectIndex, setIncorrectIndex] = useState<number | null>(null);
+  const [showBigCross, setShowBigCross] = useState(false);
+  const [blockAnswer, setBlockAnswer] = useState(false);
 
   // Map status code to string
   const statusToString = (status: any) => {
@@ -80,6 +83,20 @@ function App() {
       // }, 500); // Give a short delay to allow UI update
     });
 
+    conn.on("IncorrectAnswer", (questionIndex: number) => {
+      if (question && selectedOption) {
+        const idx = question.options.findIndex((opt: string) => opt === selectedOption);
+        setIncorrectIndex(idx);
+        setShowBigCross(true);
+        setBlockAnswer(true);
+        setTimeout(() => {
+          setShowBigCross(false);
+          setBlockAnswer(false);
+        }, 2000);
+      }
+      setLoadingQuestion(false);
+    });
+
     try {
       await conn.start();
       await conn.invoke("SubmitName", name);
@@ -123,7 +140,7 @@ function App() {
   };
 
   return (
-    <div style={{ padding: 40 }}>
+    <div style={{ padding: 40, position: 'relative' }}>
       {lastPong && (
         <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', background: '#eee', padding: 8, textAlign: 'center' }}>
           Last Pong from server: {lastPong}
@@ -195,22 +212,31 @@ function App() {
                 >
                   <ul style={{ marginTop: 12, listStyle: 'none', padding: 0 }}>
                     {question.options && question.options.map((opt: string, idx: number) => (
-                      <li key={idx} style={{ marginBottom: 8 }}>
-                        <label>
+                      <li key={idx} style={{ marginBottom: 8, display: 'flex', alignItems: 'center' }}>
+                        <label style={{ display: 'flex', alignItems: 'center' }}>
                           <input
                             type="radio"
                             name="quizOption"
                             value={opt}
                             checked={selectedOption === opt}
-                            onChange={() => setSelectedOption(opt)}
+                            onChange={() => {
+                              if (!blockAnswer) {
+                                setSelectedOption(opt);
+                                setIncorrectIndex(null); // Clear cross when user changes selection
+                              }
+                            }}
                             style={{ marginRight: 8 }}
+                            disabled={blockAnswer}
                           />
                           {opt}
+                          {incorrectIndex === idx && (
+                            <span style={{ color: 'red', marginLeft: 8, fontSize: 20 }} title="Incorrect">&#10060;</span>
+                          )}
                         </label>
                       </li>
                     ))}
                   </ul>
-                  <button type="submit" disabled={!selectedOption || loadingQuestion}>
+                  <button type="submit" disabled={!selectedOption || loadingQuestion || blockAnswer}>
                     Submit Answer
                   </button>
                 </form>
@@ -225,6 +251,22 @@ function App() {
           </div>
         )}
       </div>
+      {showBigCross && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(255,255,255,0.7)',
+          zIndex: 9999,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <span style={{ color: 'red', fontSize: 120, fontWeight: 'bold', textShadow: '2px 2px 8px #fff' }}>&#10060;</span>
+        </div>
+      )}
       {/* Add spinner animation CSS */}
       <style>{`
 @keyframes spin {
