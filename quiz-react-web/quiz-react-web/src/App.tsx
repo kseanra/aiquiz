@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import * as signalR from '@microsoft/signalr';
+import './App.css';
 
 const HUB_URL = "https://localhost:5001/quizhub"; // Change if your API uses a different port
 
@@ -139,9 +140,9 @@ function App() {
   };
 
   return (
-    <div style={{ padding: 40, position: 'relative' }}>
+    <div className="app-container">
       {lastPong && (
-        <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', background: '#eee', padding: 8, textAlign: 'center' }}>
+        <div className="pong-bar">
           Last Pong from server: {lastPong}
         </div>
       )}
@@ -155,23 +156,23 @@ function App() {
           >
             <label>
               Enter your name:
-              <input
+            </label>
+             <input
                 value={name}
                 onChange={e => setName(e.target.value)}
-                style={{ marginLeft: 8 }}
+                className='set-topic-input '
                 autoFocus
               />
-            </label>
-            <button type="submit" style={{ marginLeft: 8 }}>Enter</button>
+            <button type="submit" className='set-topic-btn'>Enter</button>
           </form>
         ) : (
           <div>
             <h2>Welcome, {name}! Connected to the game room.</h2>
             {/* Player Status List */}
             {playerStates.length > 0 && (
-              <div style={{ margin: '16px 0', padding: 12, background: '#e6f7ff', borderRadius: 8 }}>
+              <div className="player-status-list">
                 <strong>Player Status:</strong>
-                <ul style={{ margin: 0, paddingLeft: 20 }}>
+                <ul>
                   {playerStates.map((p, idx) => (
                     <li key={p.connectionId || idx}>
                       {p.name || 'Anonymous'}: {statusToString(p.status)} (Question #{(p.currentQuestionIndex ?? 0) + 1})
@@ -182,12 +183,12 @@ function App() {
             )}
             {/* Hide Ready button after click */}
             {!ready && (
-              <button onClick={handleReady} style={{ marginTop: 16 }}>
+              <button className="ready-btn" onClick={handleReady}>
                 I am Ready
               </button>
             )}
             {gameOver ? (
-              <div style={{ marginTop: 24, padding: 16, background: '#ffecec', borderRadius: 8 }}>
+              <div className="game-over-box">
                 <strong>Game Over!</strong><br />
                 {winnerName ? `Winner: ${winnerName}` : 'No winner.'}
                 <div style={{ marginTop: 16 }}>
@@ -195,7 +196,7 @@ function App() {
                 </div>
               </div>
             ) : question && (
-              <div style={{ marginTop: 24, padding: 16, background: '#f9f9f9', borderRadius: 8 }}>
+              <div className="question-box">
                 <strong>Question:</strong> {question.question}
                 <form
                   onSubmit={async e => {
@@ -209,11 +210,12 @@ function App() {
                   }}
                   style={{ marginTop: 16 }}
                 >
-                  <ul style={{ marginTop: 12, listStyle: 'none', padding: 0 }}>
+                  <ul className="quiz-options">
                     {question.options && question.options.map((opt: string, idx: number) => (
-                      <li key={idx} style={{ marginBottom: 8, display: 'flex', alignItems: 'center' }}>
-                        <label style={{ display: 'flex', alignItems: 'center' }}>
+                      <li key={idx}>
+                        <label>
                           <input
+                            className="quiz-radio"
                             type="radio"
                             name="quizOption"
                             value={opt}
@@ -224,7 +226,6 @@ function App() {
                                 setIncorrectIndex(null); // Clear cross when user changes selection
                               }
                             }}
-                            style={{ marginRight: 8 }}
                             disabled={blockAnswer}
                           />
                           {opt}
@@ -239,8 +240,8 @@ function App() {
               </div>
             )}
             {loadingQuestion && (
-                  <div style={{ marginTop: 16, textAlign: 'center' }}>
-                    <span className="spinner" style={{ display: 'inline-block', width: 32, height: 32, border: '4px solid #ccc', borderTop: '4px solid #333', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+                  <div className="waiting-box">
+                    <span className="spinner" />
                     <div>Waiting for next question...</div>
                   </div>
                 )}
@@ -248,35 +249,14 @@ function App() {
         )}
       </div>
       {showBigCross && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          background: 'rgba(255,255,255,0.7)',
-          zIndex: 9999,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
+        <div className="big-cross">
           <span style={{ color: 'red', fontSize: 120, fontWeight: 'bold', textShadow: '2px 2px 8px #fff' }}>&#10060;</span>
         </div>
       )}
       {showSetTopic && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          width: '100vw',
-          height: '100vh',
-          background: 'rgba(255,255,255,0.8)',
-          zIndex: 10000,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}>
+        <div className="set-topic-modal">
           <form
+            className="set-topic-form"
             onSubmit={async e => {
               e.preventDefault();
               if (connection && topicInput.trim()) {
@@ -285,28 +265,20 @@ function App() {
                 setTopicInput('');
               }
             }}
-            style={{ background: '#fff', padding: 32, borderRadius: 12, boxShadow: '0 2px 16px #888' }}
           >
             <h2>Set Quiz Topic</h2>
             <input
+              className="set-topic-input"
               type="text"
               value={topicInput}
               onChange={e => setTopicInput(e.target.value)}
               placeholder="Enter quiz topic"
-              style={{ fontSize: 18, padding: 8, width: 240 }}
               autoFocus
             />
-            <button type="submit" style={{ marginLeft: 12, fontSize: 18, padding: '8px 24px' }}>Set Topic</button>
+            <button className="set-topic-btn" type="submit">Set Topic</button>
           </form>
         </div>
       )}
-      {/* Add spinner animation CSS */}
-      <style>{`
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-`}</style>
     </div>
   );
 }
