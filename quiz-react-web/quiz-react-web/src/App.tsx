@@ -280,7 +280,7 @@ function App() {
             onSubmit={async e => {
               e.preventDefault();
               if (connection && topicInput.trim()) {
-                await connection.invoke("SetQuizTopic", topicInput.trim());
+                 connection.invoke("SetQuizTopic", topicInput.trim());
                 setShowSetTopic(false);
                 setTopicInput('');
               }
