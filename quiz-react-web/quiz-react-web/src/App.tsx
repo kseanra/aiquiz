@@ -21,6 +21,7 @@ function App() {
   const [blockAnswer, setBlockAnswer] = useState(false);
   const [showSetTopic, setShowSetTopic] = useState(false);
   const [topicInput, setTopicInput] = useState('');
+  const [numQuestions, setNumQuestions] = useState(4); // New state for number of questions
 
   // Map status code to string
   const statusToString = (status: any) => {
@@ -259,10 +260,11 @@ function App() {
             className="set-topic-form"
             onSubmit={async e => {
               e.preventDefault();
-              if (connection && topicInput.trim()) {
-                 connection.invoke("SetQuizTopic", topicInput.trim());
+              if (connection && topicInput.trim() && numQuestions > 0) {
+                 connection.invoke("SetQuizTopic", topicInput.trim(), numQuestions);
                 setShowSetTopic(false);
                 setTopicInput('');
+                setNumQuestions(4);
               }
             }}
           >
@@ -274,6 +276,16 @@ function App() {
               onChange={e => setTopicInput(e.target.value)}
               placeholder="Enter quiz topic"
               autoFocus
+            />
+            <input
+              className="set-topic-input"
+              type="number"
+              min={1}
+              max={20}
+              value={numQuestions}
+              onChange={e => setNumQuestions(Number(e.target.value))}
+              placeholder="Number of questions"
+              style={{ marginLeft: 12, width: 80 }}
             />
             <button className="set-topic-btn" type="submit">Set Topic</button>
           </form>

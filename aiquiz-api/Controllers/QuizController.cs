@@ -32,9 +32,19 @@ namespace aiquiz_api.Controllers
         }
 
         [HttpGet("GetQuiz")]
-        public async Task<IActionResult> GetQuiz([FromQuery] string topic = "general knowledge")
+        public async Task<IActionResult> GetQuiz([FromQuery] string topic = "general knowledge", [FromQuery] int numQuestions = 4)
         {
-            var quiz = await _quizManager.GenerateQuizAsync(topic);
+            if (string.IsNullOrWhiteSpace(topic))
+            {
+                return BadRequest("Topic cannot be empty.");
+            }
+
+            if (numQuestions < 1)
+            {
+                numQuestions = 4; // Default to 4 questions if invalid number is provided
+            }
+
+            var quiz = await _quizManager.GenerateQuizAsync(topic, numQuestions);
             return Ok(quiz);
         }
     }

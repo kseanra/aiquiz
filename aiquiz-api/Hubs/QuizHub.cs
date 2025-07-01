@@ -8,7 +8,7 @@ namespace aiquiz_api.Hubs
 {
     public class QuizHub : Hub
     {
-        private static int TotlaParticipants = 1;
+        private static int TotlaParticipants = 3;
         private static ConcurrentDictionary<string, PlayerState> Players = new();
         private static List<Quiz> Questions = new(); // Use Quiz objects
         private static string CurrentTopic = "";
@@ -60,14 +60,15 @@ namespace aiquiz_api.Hubs
             await NotifyAllPlayer("PlayersStatus");
         }
 
-        public async Task SetQuizTopic(string topic)
+        public async Task SetQuizTopic(string topic, int numQuestions = 4)
         {
             if (!string.IsNullOrWhiteSpace(topic))
             {
                 CurrentTopic = topic;
-                Questions = await _quizManager.GenerateQuizAsync(CurrentTopic);
+                if (numQuestions < 1) numQuestions = 4;
+                Questions = await _quizManager.GenerateQuizAsync(CurrentTopic, numQuestions);
                 // check if all players are ready to start the game, if yes send first question
-                _logger.LogInformation("Quiz topic set to: {Topic}", topic);
+                _logger.LogInformation("Quiz topic set to: {Topic}, Number of questions: {NumQuestions}", topic, numQuestions);
                 await StartGame();
             }
         }
