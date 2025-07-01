@@ -18,6 +18,8 @@ function App() {
   const [incorrectIndex, setIncorrectIndex] = useState<number | null>(null);
   const [showBigCross, setShowBigCross] = useState(false);
   const [blockAnswer, setBlockAnswer] = useState(false);
+  const [showSetTopic, setShowSetTopic] = useState(false);
+  const [topicInput, setTopicInput] = useState('');
 
   // Map status code to string
   const statusToString = (status: any) => {
@@ -88,6 +90,10 @@ function App() {
           setShowBigCross(false);
           setBlockAnswer(false);
         }, 2000);
+    });
+
+    conn.on("RequestSetTopic", () => {
+      setShowSetTopic(true);
     });
 
     try {
@@ -255,6 +261,43 @@ function App() {
           justifyContent: 'center',
         }}>
           <span style={{ color: 'red', fontSize: 120, fontWeight: 'bold', textShadow: '2px 2px 8px #fff' }}>&#10060;</span>
+        </div>
+      )}
+      {showSetTopic && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          width: '100vw',
+          height: '100vh',
+          background: 'rgba(255,255,255,0.8)',
+          zIndex: 10000,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <form
+            onSubmit={async e => {
+              e.preventDefault();
+              if (connection && topicInput.trim()) {
+                await connection.invoke("SetQuizTopic", topicInput.trim());
+                setShowSetTopic(false);
+                setTopicInput('');
+              }
+            }}
+            style={{ background: '#fff', padding: 32, borderRadius: 12, boxShadow: '0 2px 16px #888' }}
+          >
+            <h2>Set Quiz Topic</h2>
+            <input
+              type="text"
+              value={topicInput}
+              onChange={e => setTopicInput(e.target.value)}
+              placeholder="Enter quiz topic"
+              style={{ fontSize: 18, padding: 8, width: 240 }}
+              autoFocus
+            />
+            <button type="submit" style={{ marginLeft: 12, fontSize: 18, padding: '8px 24px' }}>Set Topic</button>
+          </form>
         </div>
       )}
       {/* Add spinner animation CSS */}

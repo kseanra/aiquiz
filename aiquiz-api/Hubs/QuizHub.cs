@@ -11,7 +11,7 @@ namespace aiquiz_api.Hubs
         private static int TotlaParticipants = 1;
         private static ConcurrentDictionary<string, PlayerState> Players = new();
         private static List<Quiz> Questions = new(); // Use Quiz objects
-        private static string CurrentTopic = "general knowledge";
+        private static string CurrentTopic = "";
         private static int TotalQuestions => Questions.Count;
         private readonly ILogger<QuizHub> _logger;
         private readonly QuizManager _quizManager;
@@ -46,20 +46,30 @@ namespace aiquiz_api.Hubs
             player.Status = isReady ? PlayerStatus.ReadyForGame : PlayerStatus.WaitingForGame;
             _logger.LogInformation("Player {ConnectionId} {Name} is {Status}", player.ConnectionId, player.Name, player.Status);
 
-            // If all players are ReadyForGame, generate questions and send event to all
-            if (AllPlayersReady())
+            // If this is the first player to mark ready, ask them to set the topic
+            if (isReady && Players.Values.Count(p => p.Status == PlayerStatus.ReadyForGame) == 1)
             {
-                if (Questions.Count == 0) // Only generate once per game
-                {
-                    Questions = await _quizManager.GenerateQuizAsync(CurrentTopic);
-                }
-                var question = Questions.Count > 0 ? Questions[0] : null;
-                _logger.LogInformation("All Players are ready for the game");
-                await StartGame(question);
-                _logger.LogInformation("Send Question : {Index} to All Players.", question);
+                await Clients.Caller.SendAsync("RequestSetTopic");
+                // Do not proceed to start the game until topic is set
+                return;
             }
 
+            // If all players are ReadyForGame, generate questions and send event to all
+            await StartGame();
+
             await NotifyAllPlayer("PlayersStatus");
+        }
+
+        public async Task SetQuizTopic(string topic)
+        {
+            if (!string.IsNullOrWhiteSpace(topic))
+            {
+                CurrentTopic = topic;
+                Questions = await _quizManager.GenerateQuizAsync(CurrentTopic);
+                // check if all players are ready to start the game, if yes send first question
+                _logger.LogInformation("Quiz topic set to: {Topic}", topic);
+                await StartGame();
+            }
         }
 
         public async Task SubmitAnswer(string answer)
@@ -180,14 +190,20 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        private async Task StartGame(Quiz? question)
+        private async Task StartGame()
         {
-            if(question == null)
+            if (AllPlayersReady())
             {
-                _logger.LogWarning("No question available to start the game.");
-                return;
+                var question = Questions.Count > 0 ? Questions[0] : null;
+                _logger.LogInformation("All Players are ready for the game");
+                if (question == null)
+                {
+                    _logger.LogWarning("No question available to start the game.");
+                    return;
+                }
+                await SendNextQuestion(question);
+                _logger.LogInformation("Send Question : {Index} to All Players.", question);
             }
-            await SendNextQuestion(question);
         }
 
         private async Task SendNextQuestion(Quiz question)
