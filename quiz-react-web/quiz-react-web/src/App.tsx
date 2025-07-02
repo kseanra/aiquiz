@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import * as signalR from '@microsoft/signalr';
 import './App.css';
 
-const HUB_URL = "https://localhost:5001/quizhub"; // Change if your API uses a different port
+const host = window.location.hostname; // dynamically resolves to localhost or IP
+const port = 5001;
+const HUB_URL = `https://${host}:${port}/quizhub`;
+
+//const HUB_URL = "https://0.0.0.0:5001/quizhub"; // Change if your API uses a different port
 
 function App() {
   const [name, setName] = useState('');
@@ -56,6 +60,7 @@ function App() {
     if (!name) return;
     const conn = new signalR.HubConnectionBuilder()
       .withUrl(HUB_URL)
+      .configureLogging(signalR.LogLevel.Information)
       // .withAutomaticReconnect()
       .build();
 
@@ -111,7 +116,7 @@ function App() {
       }, 1000);
     } catch (error) {
       console.error("Connection failed: ", error);
-      alert("Failed to connect. Please try again.");
+      alert(`Failed to connect. Please try again. ${error}`);
       setConnected(false);
       setConnection(null);
     }
