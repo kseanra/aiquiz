@@ -9,7 +9,13 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<QuizManager>();
+builder.Services.AddCors();
 
+// Add this line to enable Kestrel to use configuration
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Configure(builder.Configuration.GetSection("Kestrel"));
+});
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -19,8 +25,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
-
+//app.UseHttpsRedirection();
+app.UseCors(builder =>
+    builder
+      //.WithOrigins("http://localhost:3000")
+      .SetIsOriginAllowed(_ => true) // Allow any origin
+      .AllowAnyHeader()
+      .AllowAnyMethod()
+      .AllowCredentials()
+);
 app.UseAuthorization();
 
 app.MapControllers();

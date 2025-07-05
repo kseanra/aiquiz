@@ -15,9 +15,9 @@ namespace aiquiz_api.Services
         public QuizManager(IConfiguration configuration)
         {
             var azureConfig = configuration.GetSection("AzureOpenAI");
-            var endpointStr = azureConfig["Endpoint"] ?? string.Empty;
-            var deploymentName = azureConfig["DeploymentName"] ?? string.Empty;
-            var apiKey = azureConfig["ApiKey"] ?? string.Empty;
+            var endpointStr =  Environment.GetEnvironmentVariable("AzureOpenAIEndpoint") ??  azureConfig["Endpoint"] ;
+            var deploymentName = Environment.GetEnvironmentVariable("DeploymentName") ?? azureConfig["DeploymentName"];
+            var apiKey = Environment.GetEnvironmentVariable("ApiKey") ?? azureConfig["ApiKey"];
 
             if (string.IsNullOrWhiteSpace(endpointStr) || string.IsNullOrWhiteSpace(deploymentName) || string.IsNullOrWhiteSpace(apiKey))
             {
@@ -29,11 +29,12 @@ namespace aiquiz_api.Services
             _chatClient = azureClient.GetChatClient(deploymentName);
         }
 
-        public async Task<List<Quiz>> GenerateQuizAsync(string topic)
+        public async Task<List<Quiz>> GenerateQuizAsync(string topic, int numQuestions)
         {
+            if (numQuestions < 1) numQuestions = 4;
             List<ChatMessage> messages = new List<ChatMessage>()
             {
-                new UserChatMessage($"Generate 4 quizs about {topic}?, with 4 options and the correct answer. Only return json serialized string of object {{ Question: string,  Options: string[] Answer: string. }}"),
+                new UserChatMessage($"Generate {numQuestions} quizs about {topic}?, with 4 options and the correct answer. Only return json serialized string of object {{ Question: string,  Options: string[] Answer: string. }}, Each time I run this, the questions should be different."),
             };
 
             var response = await _chatClient.CompleteChatAsync(messages);
