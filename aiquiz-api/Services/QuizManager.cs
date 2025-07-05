@@ -8,7 +8,7 @@ using System.Text.Json;
 
 namespace aiquiz_api.Services
 {
-    public class QuizManager
+    public class QuizManager : IQuizManager
     {
         private readonly ChatClient _chatClient;
 

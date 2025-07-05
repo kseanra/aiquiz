@@ -7,7 +7,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
-builder.Services.AddSingleton<QuizManager>();
+builder.Services.AddSingleton<IQuizManager, QuizManager>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowQuizClient", builder =>
