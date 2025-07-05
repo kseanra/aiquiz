@@ -3,10 +3,8 @@ import * as signalR from '@microsoft/signalr';
 import './App.css';
 
 const host = window.location.hostname; // dynamically resolves to localhost or IP
-const port = 5001;
-const HUB_URL = `https://${host}:${port}/quizhub`;
-
-//const HUB_URL = "https://0.0.0.0:5001/quizhub"; // Change if your API uses a different port
+const port = 5000;
+const HUB_URL = `http://${host}:${port}/quizhub`;
 
 function App() {
   const [name, setName] = useState('');

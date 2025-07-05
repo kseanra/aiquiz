@@ -11,7 +11,6 @@ builder.Services.AddSignalR();
 builder.Services.AddSingleton<QuizManager>();
 builder.Services.AddCors();
 
-
 // Add this line to enable Kestrel to use configuration
 builder.WebHost.ConfigureKestrel(options =>
 {

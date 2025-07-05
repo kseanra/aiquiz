@@ -1,6 +1,6 @@
-@aiquiz_api_HostAddress = http://localhost:5084
+@aiquiz_api_HostAddress = http://localhost:5000
 
-GET {{aiquiz_api_HostAddress}}/weatherforecast/
+GET {{aiquiz_api_HostAddress}}/api/Quiz/GetQuiz?topic=general%20knowledge&numQuestions=4
 Accept: application/json
 
 ###
