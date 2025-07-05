@@ -8,6 +8,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
 builder.Services.AddSingleton<IQuizManager, QuizManager>();
+builder.Services.AddSingleton<IRoomManager, RoomManager>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowQuizClient", builder =>

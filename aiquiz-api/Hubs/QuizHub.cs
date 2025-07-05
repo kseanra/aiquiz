@@ -14,20 +14,22 @@ namespace aiquiz_api.Hubs
         private static string CurrentTopic = "";
         private static int TotalQuestions => Questions.Count;
         private readonly ILogger<QuizHub> _logger;
-        private readonly QuizManager _quizManager;
+        private readonly IQuizManager _quizManager;
+        private readonly IRoomManager _roomManager;
 
-        public QuizHub(ILogger<QuizHub> logger, QuizManager quizManager)
+        public QuizHub(ILogger<QuizHub> logger, IQuizManager quizManager, IRoomManager roomManager)
         {
             _logger = logger;
             _quizManager = quizManager;
+            _roomManager = roomManager;
         }
 
         public override async Task OnConnectedAsync()
         {
             _logger.LogInformation("Client connected: {ConnectionId}", Context.ConnectionId);
             Players[Context.ConnectionId] = new PlayerState() { ConnectionId = Context.ConnectionId, Status = PlayerStatus.JustJoined };
-
-            await Clients.Caller.SendAsync("RequestName");
+            await JoinRoom();
+            await SendMessage("RequestName");
             await base.OnConnectedAsync();
         }
 
@@ -37,7 +39,7 @@ namespace aiquiz_api.Hubs
             player.Name = name;
             player.Status = PlayerStatus.JustJoined;
             _logger.LogInformation("Player {ConnectionId} {Name} is {Status}", player.ConnectionId, player.Name, player.Status);
-            await Clients.Caller.SendAsync("ReadyForGame", GetPlayerStates());
+            await SendMessage("ReadyForGame", GetPlayerStates());
         }
 
         public async Task ReadyForGame(bool isReady)
@@ -49,7 +51,7 @@ namespace aiquiz_api.Hubs
             // If this is the first player to mark ready, ask them to set the topic
             if (isReady && Players.Values.Count(p => p.Status == PlayerStatus.ReadyForGame) == 1)
             {
-                await Clients.Caller.SendAsync("RequestSetTopic");
+                await SendMessage("RequestSetTopic");
                 // Do not proceed to start the game until topic is set
                 return;
             }
@@ -107,7 +109,7 @@ namespace aiquiz_api.Hubs
             {
                 _logger.LogInformation("Player {ConnectionId} answered incorrectly.", player.ConnectionId);
                 // Optionally, you can notify the player or let them retry
-                await Clients.Caller.SendAsync("IncorrectAnswer", player.CurrentQuestionIndex);
+                await SendMessage("IncorrectAnswer", player.CurrentQuestionIndex);
             }
 
             // Notify all players about everyone's status
@@ -125,18 +127,55 @@ namespace aiquiz_api.Hubs
             _logger.LogInformation("Client disconnected: {ConnectionId}, Player: {Name}", Context.ConnectionId, player.Name);
             Players.TryRemove(Context.ConnectionId, out _);
             await base.OnDisconnectedAsync(exception);
+            await _roomManager.LeaveRoomAsync(Context.ConnectionId);
+        }
+
+        private async Task JoinRoom()
+        {
+            var room = await _roomManager.JoinRoomAsync(Context.ConnectionId);
+            if (room != null)
+            {
+                _logger.LogInformation("Player {ConnectionId} joined room {RoomId}", Context.ConnectionId, room.RoomId);
+                await Groups.AddToGroupAsync(Context.ConnectionId, room.RoomId);            }
+            else
+            {
+                _logger.LogWarning("Failed to join room for Player {ConnectionId}", Context.ConnectionId);
+            }
+        }
+
+        private async Task SendMessage(string message,  object? data = null)
+        {
+            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
+            if (room != null)
+            {
+                await Clients.Group(room.RoomId).SendAsync(message, Context.ConnectionId, data);
+            }
+        }
+
+        private async Task SendGroupMessage(string message, object? data = null)
+        {
+            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
+            if (room != null)
+            {
+                await Clients.Group(room.RoomId).SendAsync(message, data);
+            }
+        }
+
+        private async Task SetReady(bool isReady)
+        {
+            var allReady = await _roomManager.SetPlayerReadyAsync(Context.ConnectionId, isReady);
+            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
+            if (room != null && allReady)
+            {
+                room.IsGameStarted = true;
+                await Clients.Group(room.RoomId).SendAsync("GameStarted");
+            }
         }
 
         // Returns true if any player's status is GameOver
         private bool HaveGameWinner()
         {
             var result = Players.Values.Any(p => p.Status == PlayerStatus.GameWinner);
-            return result;
-        }
-
-        private bool IsLastQuestion(PlayerState player)
-        {
-            var result = player.CurrentQuestionIndex >= TotalQuestions - 1;
             return result;
         }
 
@@ -173,7 +212,7 @@ namespace aiquiz_api.Hubs
             var playerStates = GetPlayerStates();
             if (Players != null)
             {
-                await Clients.All.SendAsync(method ?? "PlayersStatus", playerStates);
+                await SendGroupMessage(method ?? "PlayersStatus", playerStates);
             }
         }
 
@@ -186,7 +225,7 @@ namespace aiquiz_api.Hubs
             }
             if (Players.TryGetValue(Context.ConnectionId, out var player))
             {
-                await Clients.Caller.SendAsync(method, question);
+                await SendMessage(method, question);
                 _logger.LogInformation("Send Question to Player {Name} : {Index}", player.Name, question);
             }
         }
@@ -202,23 +241,8 @@ namespace aiquiz_api.Hubs
                     _logger.LogWarning("No question available to start the game.");
                     return;
                 }
-                await SendNextQuestion(question);
+                await SendGroupMessage("ReceiveQuestion", question);
                 _logger.LogInformation("Send Question : {Index} to All Players.", question);
-            }
-        }
-
-        private async Task SendNextQuestion(Quiz question)
-        {
-            if (question == null)
-            {
-                _logger.LogWarning("No question available to start the game.");
-                return;
-            }
-
-            if (Players.TryGetValue(Context.ConnectionId, out var player))
-            {
-                await Clients.All.SendAsync("ReceiveQuestion", question);
-                _logger.LogInformation("Send Question to Player {Name} : {Index}", player.Name, question);
             }
         }
     }
