@@ -7,9 +7,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
-builder.Services.AddSignalR();
 builder.Services.AddSingleton<QuizManager>();
-builder.Services.AddCors();
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowQuizClient", builder =>
+    {
+        // Allow any origin, header, and method
+        builder
+            .WithOrigins("http://192.168.68.59:3000", "https://192.168.68.59:3000")
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+builder.Services.AddSignalR();
 
 // Add this line to enable Kestrel to use configuration
 builder.WebHost.ConfigureKestrel(options =>
@@ -25,15 +36,9 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-//app.UseHttpsRedirection();
-app.UseCors(builder =>
-    builder
-      //.WithOrigins("http://localhost:3000")
-      .SetIsOriginAllowed(_ => true) // Allow any origin
-      .AllowAnyHeader()
-      .AllowAnyMethod()
-      .AllowCredentials()
-);
+app.UseHttpsRedirection();
+app.UseCors("AllowQuizClient");
+
 app.UseAuthorization();
 
 app.MapControllers();
