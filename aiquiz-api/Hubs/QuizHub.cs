@@ -101,6 +101,7 @@ namespace aiquiz_api.Hubs
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
+            _logger.LogDebug("On Disconnected {connectionid}", Context.ConnectionId);
             await base.OnDisconnectedAsync(exception);
             await _roomManager.LeaveRoomAsync(Context.ConnectionId);
         }

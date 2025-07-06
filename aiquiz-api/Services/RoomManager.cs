@@ -16,6 +16,7 @@ public class RoomManager : IRoomManager
         var room = await GetRoomByConnectionAsync(connectionId);
         if (room == null)
         {
+            _logger.LogDebug("Create a new game room");
             room = new GameRoom { RoomId = $"room-{Guid.NewGuid()}" };
             Rooms[room.RoomId] = room;
         }
@@ -31,7 +32,9 @@ public class RoomManager : IRoomManager
         if (room != null)
         {
             room.Players.TryRemove(connectionId, out _);
+            _logger.LogDebug("Remove player {player}", connectionId);
             if (!room.Players.Any())
+                _logger.LogDebug("Remove game room {id}", room.RoomId);
                 Rooms.TryRemove(room.RoomId, out _); // Remove room if no players left
         }
     }

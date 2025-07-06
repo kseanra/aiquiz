@@ -15,7 +15,11 @@ builder.Services.AddCors(options =>
     {
         // Allow any origin, header, and method
         builder
-            .WithOrigins("http://192.168.68.59:3000")
+            .WithOrigins(
+                "https://192.168.68.59:3000",
+                "http://192.168.68.59:3000",
+                "https://localhost:3000",
+                "http://localhost:3000")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
