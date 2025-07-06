@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import * as signalR from '@microsoft/signalr';
 import './App.css';
+import { Console } from 'console';
+import { stringify } from 'querystring';
 
 const host = window.location.hostname; // dynamically resolves to localhost or IP
-const port = 5001;
-const HUB_URL = `https://${host}:${port}/quizhub`;
+const port = 5000;
+const HUB_URL = `http://${host}:${port}/quizhub`;
 
 function App() {
   const [name, setName] = useState('');
@@ -63,11 +65,13 @@ function App() {
       .build();
 
     conn.on("ReceiveQuestion", (quiz: any) => {
+      console.log(`on ReciveQuestion ${JSON.stringify(quiz)}`);
       setQuestion(quiz); // Set Quiz object in state
       setLoadingQuestion(false);
     });
 
     conn.on("PlayersStatus", (players: any[]) => {
+      console.log("on PlayersStatus");
       setPlayerStates(players);
     });
 
@@ -76,6 +80,7 @@ function App() {
     });
 
     conn.on("GameOver", (players: any[]) => {
+      console.log("on GameOver");
       setGameOver(true);
       setQuestion(null);
       setSelectedOption('');
@@ -108,10 +113,10 @@ function App() {
       setConnected(true);
       setReady(false);
       // Start pinging every 1 second
-      setInterval(() => {
-        if(!conn || conn.state !== signalR.HubConnectionState.Connected) return;
-          conn.invoke("Ping");
-      }, 1000);
+      // setInterval(() => {
+      //   if(!conn || conn.state !== signalR.HubConnectionState.Connected) return;
+      //     conn.invoke("Ping");
+      // }, 1000);
     } catch (error) {
       console.error("Connection failed: ", error);
       alert(`Failed to connect. Please try again. ${error}`);
