@@ -158,6 +158,7 @@ function App() {
       <div style={{ marginTop: lastPong ? 40 : 0 }}>
         {!connected ? (
           <form
+            className='form-margin-top'
             onSubmit={e => {
               e.preventDefault();
               handleConnect();
@@ -167,12 +168,12 @@ function App() {
               Enter your name:
             </label>
              <input
+                type='text'
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className='set-topic-input '
                 autoFocus
               />
-            <button type="submit" className='set-topic-btn'>Enter</button>
+            <button type="submit">Enter</button>
           </form>
         ) : (
           <div>
@@ -278,7 +279,6 @@ function App() {
           >
             <h2>Set Quiz Topic</h2>
             <input
-              className="set-topic-input"
               type="text"
               value={topicInput}
               onChange={e => setTopicInput(e.target.value)}
@@ -286,7 +286,6 @@ function App() {
               autoFocus
             />
             <input
-              className="set-topic-input"
               type="number"
               min={1}
               max={20}
@@ -295,7 +294,7 @@ function App() {
               placeholder="Number of questions"
               style={{ marginLeft: 12, width: 80 }}
             />
-            <button className="set-topic-btn" type="submit">Set Topic</button>
+            <button type="submit">Set Topic</button>
           </form>
         </div>
       )}
