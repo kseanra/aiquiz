@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import * as signalR from '@microsoft/signalr';
 import './App.css';
+import { Console } from 'console';
+import { stringify } from 'querystring';
 
 const host = window.location.hostname; // dynamically resolves to localhost or IP
 const port = 5001;
@@ -63,11 +65,13 @@ function App() {
       .build();
 
     conn.on("ReceiveQuestion", (quiz: any) => {
+      console.log(`on ReciveQuestion ${JSON.stringify(quiz)}`);
       setQuestion(quiz); // Set Quiz object in state
       setLoadingQuestion(false);
     });
 
     conn.on("PlayersStatus", (players: any[]) => {
+      console.log("on PlayersStatus");
       setPlayerStates(players);
     });
 
@@ -76,6 +80,7 @@ function App() {
     });
 
     conn.on("GameOver", (players: any[]) => {
+      console.log("on GameOver");
       setGameOver(true);
       setQuestion(null);
       setSelectedOption('');
@@ -108,10 +113,10 @@ function App() {
       setConnected(true);
       setReady(false);
       // Start pinging every 1 second
-      setInterval(() => {
-        if(!conn || conn.state !== signalR.HubConnectionState.Connected) return;
-          conn.invoke("Ping");
-      }, 1000);
+      // setInterval(() => {
+      //   if(!conn || conn.state !== signalR.HubConnectionState.Connected) return;
+      //     conn.invoke("Ping");
+      // }, 1000);
     } catch (error) {
       console.error("Connection failed: ", error);
       alert(`Failed to connect. Please try again. ${error}`);
@@ -153,6 +158,7 @@ function App() {
       <div style={{ marginTop: lastPong ? 40 : 0 }}>
         {!connected ? (
           <form
+            className='form-margin-top'
             onSubmit={e => {
               e.preventDefault();
               handleConnect();
@@ -162,12 +168,12 @@ function App() {
               Enter your name:
             </label>
              <input
+                type='text'
                 value={name}
                 onChange={e => setName(e.target.value)}
-                className='set-topic-input '
                 autoFocus
               />
-            <button type="submit" className='set-topic-btn'>Enter</button>
+            <button type="submit">Enter</button>
           </form>
         ) : (
           <div>
@@ -273,7 +279,6 @@ function App() {
           >
             <h2>Set Quiz Topic</h2>
             <input
-              className="set-topic-input"
               type="text"
               value={topicInput}
               onChange={e => setTopicInput(e.target.value)}
@@ -281,7 +286,6 @@ function App() {
               autoFocus
             />
             <input
-              className="set-topic-input"
               type="number"
               min={1}
               max={20}
@@ -290,7 +294,7 @@ function App() {
               placeholder="Number of questions"
               style={{ marginLeft: 12, width: 80 }}
             />
-            <button className="set-topic-btn" type="submit">Set Topic</button>
+            <button type="submit">Set Topic</button>
           </form>
         </div>
       )}

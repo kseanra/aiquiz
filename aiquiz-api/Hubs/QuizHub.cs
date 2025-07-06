@@ -8,106 +8,86 @@ namespace aiquiz_api.Hubs
 {
     public class QuizHub : Hub
     {
-        private static int TotlaParticipants = 3;
         private static ConcurrentDictionary<string, PlayerState> Players = new();
         private static List<Quiz> Questions = new(); // Use Quiz objects
         private static string CurrentTopic = "";
         private static int TotalQuestions => Questions.Count;
         private readonly ILogger<QuizHub> _logger;
-        private readonly QuizManager _quizManager;
+        private readonly IQuizManager _quizManager;
+        private readonly IRoomManager _roomManager;
 
-        public QuizHub(ILogger<QuizHub> logger, QuizManager quizManager)
+        public QuizHub(ILogger<QuizHub> logger, IQuizManager quizManager, IRoomManager roomManager)
         {
             _logger = logger;
             _quizManager = quizManager;
+            _roomManager = roomManager;
         }
 
         public override async Task OnConnectedAsync()
         {
             _logger.LogInformation("Client connected: {ConnectionId}", Context.ConnectionId);
-            Players[Context.ConnectionId] = new PlayerState() { ConnectionId = Context.ConnectionId, Status = PlayerStatus.JustJoined };
-
-            await Clients.Caller.SendAsync("RequestName");
+            await JoinRoom();
+            await SendMessage("RequestName");   
             await base.OnConnectedAsync();
         }
 
         public async Task SubmitName(string name)
         {
-            var player = Players[Context.ConnectionId];
-            player.Name = name;
-            player.Status = PlayerStatus.JustJoined;
-            _logger.LogInformation("Player {ConnectionId} {Name} is {Status}", player.ConnectionId, player.Name, player.Status);
-            await Clients.Caller.SendAsync("ReadyForGame", GetPlayerStates());
+            var gameRoom = await _roomManager.SetPlayerNameAsync(Context.ConnectionId, name);
+            await SendMessage("ReadyForGame", gameRoom?.Players.Values);
+            await NotifyAllPlayer("PlayersStatus");
         }
 
         public async Task ReadyForGame(bool isReady)
         {
-            var player = Players[Context.ConnectionId];
-            player.Status = isReady ? PlayerStatus.ReadyForGame : PlayerStatus.WaitingForGame;
-            _logger.LogInformation("Player {ConnectionId} {Name} is {Status}", player.ConnectionId, player.Name, player.Status);
-
+            var gameRoom = await _roomManager.SetPlayerReadyAsync(Context.ConnectionId);
             // If this is the first player to mark ready, ask them to set the topic
-            if (isReady && Players.Values.Count(p => p.Status == PlayerStatus.ReadyForGame) == 1)
+            if (isReady && gameRoom?.Players.Values.Count(p => p.Status == PlayerStatus.ReadyForGame) == 1)
             {
-                await Clients.Caller.SendAsync("RequestSetTopic");
-                // Do not proceed to start the game until topic is set
-                return;
+                await SendMessage("RequestSetTopic");
             }
-
-            // If all players are ReadyForGame, generate questions and send event to all
-            await StartGame();
+            else
+            {
+                await StartGame(gameRoom);
+            }
 
             await NotifyAllPlayer("PlayersStatus");
         }
 
-        public async Task SetQuizTopic(string topic, int numQuestions = 4)
+        public async Task SetQuizTopic(string topic, int? numQuestions)
         {
             if (!string.IsNullOrWhiteSpace(topic))
             {
                 CurrentTopic = topic;
-                if (numQuestions < 1) numQuestions = 4;
-                Questions = await _quizManager.GenerateQuizAsync(CurrentTopic, numQuestions);
+                var quizs = await _quizManager.GenerateQuizAsync(CurrentTopic, Math.Min(numQuestions ?? 4, 20));
+                var gameRoom = await _roomManager.SetQuizAsync(Context.ConnectionId, quizs);
                 // check if all players are ready to start the game, if yes send first question
                 _logger.LogInformation("Quiz topic set to: {Topic}, Number of questions: {NumQuestions}", topic, numQuestions);
-                await StartGame();
+                await StartGame(gameRoom);
             }
         }
 
         public async Task SubmitAnswer(string answer)
         {
-            var player = Players[Context.ConnectionId];
 
-            _logger.LogInformation("Player {ConnectionId} {Name} submitted answer: {Answer} for question index: {Index}", player.ConnectionId, player.Name, answer, player.CurrentQuestionIndex);
-            // Check if answer is correct for the current question
-            bool isCorrect = false;
-            if (player.CurrentQuestionIndex < Questions.Count)
-            {
-                var currentQuestion = Questions[player.CurrentQuestionIndex];
-                isCorrect = string.Equals(answer?.Trim(), currentQuestion.Answer?.Trim(), StringComparison.OrdinalIgnoreCase);
-            }
+            var (isCorrect, gameRoom, quiz) = await _roomManager.MarkAnswer(Context.ConnectionId, answer);
 
             if (isCorrect)
             {
-                _logger.LogInformation("Player {ConnectionId} answered correctly.", player.ConnectionId);
                 // Send the next question if not last question
-                if (player.CurrentQuestionIndex < TotalQuestions - 1)
+                if (string.IsNullOrEmpty(gameRoom?.GameWinner))
                 {
-                    player.CurrentQuestionIndex++;
-                    _logger.LogInformation("Send new question to Player {ConnectionId} {Name} : {Index}", player.ConnectionId, player.Name, player.CurrentQuestionIndex);
-                    await SendQuestionToPlayer("ReceiveQuestion", Questions[player.CurrentQuestionIndex]);
+                    await SendMessage("ReceiveQuestion", quiz);
                 }
-                else if (!HaveGameWinner())
+                else
                 {
-                    SetCurrentPlayerAsGameWinner();
-                    _logger.LogInformation("Game Over, we have a winner: {Name}", player.Name);
                     await NotifyAllPlayer("GameOver");
                 }
             }
             else
             {
-                _logger.LogInformation("Player {ConnectionId} answered incorrectly.", player.ConnectionId);
                 // Optionally, you can notify the player or let them retry
-                await Clients.Caller.SendAsync("IncorrectAnswer", player.CurrentQuestionIndex);
+                await SendMessage("IncorrectAnswer", 0);
             }
 
             // Notify all players about everyone's status
@@ -121,104 +101,64 @@ namespace aiquiz_api.Hubs
 
         public override async Task OnDisconnectedAsync(Exception? exception)
         {
-            var player = Players[Context.ConnectionId];
-            _logger.LogInformation("Client disconnected: {ConnectionId}, Player: {Name}", Context.ConnectionId, player.Name);
-            Players.TryRemove(Context.ConnectionId, out _);
+            _logger.LogDebug("On Disconnected {connectionid}", Context.ConnectionId);
             await base.OnDisconnectedAsync(exception);
+            await _roomManager.LeaveRoomAsync(Context.ConnectionId);
         }
 
-        // Returns true if any player's status is GameOver
-        private bool HaveGameWinner()
+        private async Task JoinRoom()
         {
-            var result = Players.Values.Any(p => p.Status == PlayerStatus.GameWinner);
-            return result;
-        }
-
-        private bool IsLastQuestion(PlayerState player)
-        {
-            var result = player.CurrentQuestionIndex >= TotalQuestions - 1;
-            return result;
-        }
-
-        // Set the current player as the game winner
-        private void SetCurrentPlayerAsGameWinner()
-        {
-            if (Players.TryGetValue(Context.ConnectionId, out var player))
+            var room = await _roomManager.JoinRoomAsync(Context.ConnectionId);
+            if (room != null)
             {
-                player.Status = PlayerStatus.GameWinner;
+                _logger.LogInformation("Player {ConnectionId} joined room {RoomId}", Context.ConnectionId, room.RoomId);
+                await Groups.AddToGroupAsync(Context.ConnectionId, room.RoomId);            }
+            else
+            {
+                _logger.LogWarning("Failed to join room for Player {ConnectionId}", Context.ConnectionId);
             }
         }
 
-        // Helper function to return a list of PlayerState from Players
-        private List<PlayerState> GetPlayerStates()
+        private async Task SendMessage(string message,  object? data = null)
         {
-            var players = Players?.Values.ToList() ?? new List<PlayerState>();
-
-            foreach (var player in players)
+            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
+            if (room != null)
             {
-                _logger.LogInformation("Current Players Status: {ConnectionId} {Name} : {PlayersStatus}", player.ConnectionId, player.Name, player.Status);
-            }
-
-            return players;
-        }
-
-        private bool AllPlayersReady()
-        {
-            var playersNotReady = Players.Values.Any(p => p.Status != PlayerStatus.ReadyForGame);
-            return Players.Count == TotlaParticipants && playersNotReady == false;
-        }
-
-        private async Task NotifyAllPlayer(string method)
-        {
-            var playerStates = GetPlayerStates();
-            if (Players != null)
-            {
-                await Clients.All.SendAsync(method ?? "PlayersStatus", playerStates);
+                await Clients.Caller.SendAsync(message, data);
+                _logger.LogInformation("Send Message {message} to {connectionId} with data {data}", message, Context.ConnectionId, data );
             }
         }
 
-        private async Task SendQuestionToPlayer(string method, Quiz? question)
+        private async Task SendGroupMessage(string message, object? data = null)
         {
-            if(question == null)
+            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
+            if (room != null)
             {
-                _logger.LogWarning("Question is null, cannot send to player.");
-                return;
-            }
-            if (Players.TryGetValue(Context.ConnectionId, out var player))
-            {
-                await Clients.Caller.SendAsync(method, question);
-                _logger.LogInformation("Send Question to Player {Name} : {Index}", player.Name, question);
+                await Clients.Group(room.RoomId).SendAsync(message, data);
             }
         }
 
-        private async Task StartGame()
+        private async Task NotifyAllPlayer(string message)
         {
-            if (AllPlayersReady())
+            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
+            if (room != null)
             {
-                var question = Questions.Count > 0 ? Questions[0] : null;
+                await Clients.Group(room.RoomId).SendAsync(message, room.Players.Values);
+            }
+        }
+
+        private async Task StartGame(GameRoom? gameRoom)
+        {
+            if (gameRoom?.ReadyForGame == true)
+            {
                 _logger.LogInformation("All Players are ready for the game");
-                if (question == null)
+                if (gameRoom.Questions.Count == 0)
                 {
                     _logger.LogWarning("No question available to start the game.");
                     return;
                 }
-                await SendNextQuestion(question);
-                _logger.LogInformation("Send Question : {Index} to All Players.", question);
-            }
-        }
-
-        private async Task SendNextQuestion(Quiz question)
-        {
-            if (question == null)
-            {
-                _logger.LogWarning("No question available to start the game.");
-                return;
-            }
-
-            if (Players.TryGetValue(Context.ConnectionId, out var player))
-            {
-                await Clients.All.SendAsync("ReceiveQuestion", question);
-                _logger.LogInformation("Send Question to Player {Name} : {Index}", player.Name, question);
+                await SendGroupMessage("ReceiveQuestion", gameRoom.Questions[0]);
+                _logger.LogInformation("Send Question : {Index} to All Players.", 0);
             }
         }
     }

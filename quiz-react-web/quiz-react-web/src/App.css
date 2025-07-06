@@ -49,6 +49,23 @@
   }
 }
 
+.form-margin-top > * {
+  margin-top: 10px;
+}
+
+button {
+  font-size: 18px; 
+  padding: 8px 24px;
+}
+
+input[type="text"], input[type="number"] {
+  font-size: 18px; 
+  padding: 8px; 
+  width: 240px; 
+  margin-left: 3px;
+  margin-right: 12px;
+}
+
 .pong-bar {
   position: absolute;
   top: 0;
@@ -148,7 +165,10 @@
           position: fixed;
           top: 0;
           left: 0;
-           width: 100vw;
+          right: 0;
+          bottom: 0;
+          margin: 0 auto;
+          width: 100vw;
           height: 100vh;
           background: rgba(255,255,255,0.8);
           z-Index: 10000;
@@ -164,14 +184,17 @@
   box-shadow: 0 2px 16px #888; 
 }
 
-.set-topic-input { 
-  font-size: 18px; 
-  padding: 8px; 
-  width: 240px; 
+.set-topic-form > * {
+  margin-top: 10px;;
 }
 
-.set-topic-btn {
-  margin-left: 12px; 
-  font-size: 18px; 
-  padding: 8px 24px;
+/* Mobile view: display block and adjust width/padding */
+@media (max-width: 600px) {
+  .set-topic-form {
+    display: block;
+    width: 95vw;
+    min-width: 0;
+    padding: 16px;
+    box-sizing: border-box;
+  }
 }

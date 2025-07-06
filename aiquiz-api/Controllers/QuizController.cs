@@ -8,7 +8,7 @@ namespace aiquiz_api.Controllers
     [Route("api/[controller]")]
     public class QuizController : ControllerBase
     {
-        private readonly QuizManager _quizManager;
+        private readonly IQuizManager _quizManager;
         /// <summary>
         /// Initializes a new instance of the <see cref="QuizController"/> class.
         /// </summary>
@@ -26,7 +26,7 @@ namespace aiquiz_api.Controllers
         /// <remarks>
         /// This controller handles requests related to quiz generation.
         /// </remarks>          
-        public QuizController(QuizManager quizManager)
+        public QuizController(IQuizManager quizManager)
         {
             _quizManager = quizManager;
         }

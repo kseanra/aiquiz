@@ -7,14 +7,19 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddControllers();
-builder.Services.AddSingleton<QuizManager>();
+builder.Services.AddSingleton<IQuizManager, QuizManager>();
+builder.Services.AddSingleton<IRoomManager, RoomManager>();
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowQuizClient", builder =>
     {
         // Allow any origin, header, and method
         builder
-            .WithOrigins("http://192.168.68.59:3000", "https://192.168.68.59:3000")
+            .WithOrigins(
+                "https://192.168.68.59:3000",
+                "http://192.168.68.59:3000",
+                "https://localhost:3000",
+                "http://localhost:3000")
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -23,10 +28,10 @@ builder.Services.AddCors(options =>
 builder.Services.AddSignalR();
 
 // Add this line to enable Kestrel to use configuration
-builder.WebHost.ConfigureKestrel(options =>
-{
-    options.Configure(builder.Configuration.GetSection("Kestrel"));
-});
+// builder.WebHost.ConfigureKestrel(options =>
+// {
+//     options.Configure(builder.Configuration.GetSection("Kestrel"));
+// });
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -36,7 +41,7 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
-app.UseHttpsRedirection();
+//app.UseHttpsRedirection();
 app.UseCors("AllowQuizClient");
 
 app.UseAuthorization();
