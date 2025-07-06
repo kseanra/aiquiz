@@ -38,7 +38,7 @@ public class RoomManager : IRoomManager
 
     public async Task<GameRoom?> GetRoomByConnectionAsync(string connectionId)
     {
-        return Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId));
+        return Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId)) ?? Rooms.Values.FirstOrDefault( r => r.Players.Count < MaxPlayers);
     }
 
     public async Task<GameRoom?> SetPlayerReadyAsync(string connectionId)
