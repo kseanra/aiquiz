@@ -28,10 +28,10 @@ builder.Services.AddCors(options =>
 builder.Services.AddSignalR();
 
 // Add this line to enable Kestrel to use configuration
-// builder.WebHost.ConfigureKestrel(options =>
-// {
-//     options.Configure(builder.Configuration.GetSection("Kestrel"));
-// });
+builder.WebHost.ConfigureKestrel(options =>
+{
+    options.Configure(builder.Configuration.GetSection("Kestrel"));
+});
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
