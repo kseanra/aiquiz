@@ -61,9 +61,13 @@ namespace aiquiz_api.Hubs
                 CurrentTopic = topic;
                 var quizs = await _quizManager.GenerateQuizAsync(CurrentTopic, Math.Min(numQuestions ?? 4, 20));
                 var gameRoom = await _roomManager.SetQuizAsync(Context.ConnectionId, quizs);
-                // check if all players are ready to start the game, if yes send first question
+                // Send start countdown event to all players in the room (e.g., 60 seconds)
+                if (gameRoom != null)
+                {
+                    await Clients.Group(gameRoom.RoomId).SendAsync("StartCountdown", 60);
+                }
                 _logger.LogInformation("Quiz topic set to: {Topic}, Number of questions: {NumQuestions}", topic, numQuestions);
-                await StartGame(gameRoom);
+                // Do not start the game immediately; game will start after countdown on client
             }
         }
 
