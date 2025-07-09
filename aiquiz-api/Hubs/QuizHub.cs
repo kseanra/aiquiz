@@ -64,10 +64,36 @@ namespace aiquiz_api.Hubs
                 // Send start countdown event to all players in the room (e.g., 60 seconds)
                 if (gameRoom != null)
                 {
-                    await Clients.Group(gameRoom.RoomId).SendAsync("StartCountdown", 60);
+                    _logger.LogDebug("Send countdown to client");
+                    await Clients.Group(gameRoom.RoomId).SendAsync("StartCountdown", 10);
+                    // Schedule game start after 60 seconds
+                    // Use a timer to marshal back to the Hub context after countdown
+                    var roomId = gameRoom.RoomId;
+                    var questionsCopy = gameRoom.Questions.ToList();
+                    var hubContext = this.Context;
+                    var logger = _logger;
+                    var roomManager = _roomManager;
+                    var clients = Clients;
+                    _ = Task.Run(async () => {
+                        await Task.Delay(10000);
+                        try
+                        {
+                            // Use the static GlobalHost to get a new Hub context if needed (for production, inject IHubContext<QuizHub>)
+                            var latestRoom = await roomManager.GetRoomByConnectionAsync(hubContext.ConnectionId);
+                            if (latestRoom != null && latestRoom.RoomId == roomId && questionsCopy.Count > 0 && !latestRoom.IsGameStarted)
+                            {
+                                latestRoom.IsGameStarted = true;
+                                await clients.Group(roomId).SendAsync("ReceiveQuestion", questionsCopy[0]);
+                                logger.LogDebug("Sent first question to group {RoomId} after countdown", roomId);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "Error sending question after countdown");
+                        }
+                    });
                 }
                 _logger.LogInformation("Quiz topic set to: {Topic}, Number of questions: {NumQuestions}", topic, numQuestions);
-                // Do not start the game immediately; game will start after countdown on client
             }
         }
 
