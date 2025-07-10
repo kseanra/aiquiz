@@ -3,6 +3,7 @@ using System.Collections.Concurrent;
 using aiquiz_api.Models;
 using Microsoft.Extensions.Logging;
 using aiquiz_api.Services;
+using System.Linq.Expressions;
 
 namespace aiquiz_api.Hubs
 {
@@ -26,21 +27,24 @@ namespace aiquiz_api.Hubs
         public override async Task OnConnectedAsync()
         {
             _logger.LogInformation("Client connected: {ConnectionId}", Context.ConnectionId);
-            await JoinRoom();
+            //await JoinRoom();
             await SendMessage("RequestName");   
             await base.OnConnectedAsync();
         }
 
         public async Task SubmitName(string name)
         {
-            var gameRoom = await _roomManager.SetPlayerNameAsync(Context.ConnectionId, name);
-            await SendMessage("ReadyForGame", gameRoom?.Players.Values);
-            await NotifyAllPlayer("PlayersStatus");
+            Players.AddOrUpdate(Context.ConnectionId, new PlayerState() { ConnectionId = Context.ConnectionId, Name = name}, (key, oldValue) => oldValue);
+            await SendMessage("ReadyForGame");
+            //await NotifyAllPlayer("PlayersStatus");
         }
 
         public async Task ReadyForGame(bool isReady)
         {
-            var gameRoom = await _roomManager.SetPlayerReadyAsync(Context.ConnectionId);
+            await JoinRoom();
+            
+            var gameRoom = await _roomManager.SetPlayerNameAsync(Context.ConnectionId, Players[Context.ConnectionId]?.Name ?? "");
+            gameRoom = await _roomManager.SetPlayerReadyAsync(Context.ConnectionId);
             // If this is the first player to mark ready, ask them to set the topic
             if (isReady && gameRoom?.Players.Values.Count(p => p.Status == PlayerStatus.ReadyForGame) == 1)
             {
@@ -78,13 +82,14 @@ namespace aiquiz_api.Hubs
                         await Task.Delay(10000);
                         try
                         {
-                            // Use the static GlobalHost to get a new Hub context if needed (for production, inject IHubContext<QuizHub>)
                             var latestRoom = await roomManager.GetRoomByConnectionAsync(hubContext.ConnectionId);
                             if (latestRoom != null && latestRoom.RoomId == roomId && questionsCopy.Count > 0 && !latestRoom.IsGameStarted)
                             {
                                 latestRoom.IsGameStarted = true;
+                                _logger.LogDebug("send first question to user");
+                                // Now send question to the group (only ready players remain)
                                 await clients.Group(roomId).SendAsync("ReceiveQuestion", questionsCopy[0]);
-                                logger.LogDebug("Sent first question to group {RoomId} after countdown", roomId);
+                                logger.LogDebug("Removed not-ready players and sent first question to group {RoomId} after countdown", roomId);
                             }
                         }
                         catch (Exception ex)
@@ -142,7 +147,8 @@ namespace aiquiz_api.Hubs
             if (room != null)
             {
                 _logger.LogInformation("Player {ConnectionId} joined room {RoomId}", Context.ConnectionId, room.RoomId);
-                await Groups.AddToGroupAsync(Context.ConnectionId, room.RoomId);            }
+                await Groups.AddToGroupAsync(Context.ConnectionId, room.RoomId);
+            }
             else
             {
                 _logger.LogWarning("Failed to join room for Player {ConnectionId}", Context.ConnectionId);

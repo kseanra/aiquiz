@@ -4,7 +4,7 @@ using aiquiz_api.Models;
 public class RoomManager : IRoomManager
 {
     private static readonly ConcurrentDictionary<string, GameRoom> Rooms = new();
-    private const int MaxPlayers = 1; // Maximum number of players per room
+    private const int MaxPlayers = 2; // Maximum number of players per room
     private readonly ILogger<RoomManager> _logger;
     public RoomManager(ILogger<RoomManager> logger)
     {
