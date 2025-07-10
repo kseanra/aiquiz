@@ -6,7 +6,7 @@ public interface IRoomManager
     Task<GameRoom> JoinRoomAsync(string connectionId);
     Task LeaveRoomAsync(string connectionId);
     Task<GameRoom?> GetRoomByConnectionAsync(string connectionId);
-    Task<GameRoom?> SetPlayerReadyAsync(string connectionId);
+    Task<GameRoom?> SetPlayerReadyAsync(string connectionId, string? name = null);
     Task<GameRoom?> SetPlayerQuestionAsync(string connectionId, int questionIndex);
     Task<GameRoom?> SetPlayerStatesAsync(string connectionId, PlayerStatus status);
     Task<GameRoom?> SetPlayerNameAsync(string connectionId, string playerName);

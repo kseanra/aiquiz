@@ -13,7 +13,7 @@ public class RoomManager : IRoomManager
 
     public async Task<GameRoom> JoinRoomAsync(string connectionId)
     {
-        var room = await GetRoomByConnectionAsync(connectionId);
+        var room = await FindARoomAsync(connectionId);
         if (room == null)
         {
             _logger.LogDebug("Create a new game room");
@@ -35,18 +35,18 @@ public class RoomManager : IRoomManager
             _logger.LogDebug("Remove player {player}", connectionId);
             if (!room.Players.Any())
                 _logger.LogDebug("Remove game room {id}", room.RoomId);
-                Rooms.TryRemove(room.RoomId, out _); // Remove room if no players left
+            Rooms.TryRemove(room.RoomId, out _); // Remove room if no players left
         }
     }
 
     public async Task<GameRoom?> GetRoomByConnectionAsync(string connectionId)
     {
-        return Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId)) ?? Rooms.Values.FirstOrDefault( r => r.Players.Count < MaxPlayers);
+        return Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId)) ?? Rooms.Values.FirstOrDefault(r => r.Players.Count < MaxPlayers);
     }
 
-    public async Task<GameRoom?> SetPlayerReadyAsync(string connectionId)
+    public async Task<GameRoom?> SetPlayerReadyAsync(string connectionId, string? name = null)
     {
-        return await SetPlayerStatesAsync(connectionId, null, null, PlayerStatus.ReadyForGame);
+        return await SetPlayerStatesAsync(connectionId, name, null, PlayerStatus.ReadyForGame);
     }
 
     public async Task<GameRoom?> SetPlayerQuestionAsync(string connectionId, int questionIndex)
@@ -71,27 +71,6 @@ public class RoomManager : IRoomManager
         if (room == null) { return null; }
 
         room.Questions = questions;
-        return room;
-    }
-
-    private async Task<GameRoom?> SetPlayerStatesAsync(string connectionId, string? playerName, int? questionIndex, PlayerStatus? status)
-    {
-        var room = await GetRoomByConnectionAsync(connectionId);
-        if (room == null) { return null; }
-
-        if (room.Players.TryGetValue(connectionId, out var player))
-        {
-            player.Status = status ?? player.Status;
-            player.Name = playerName ?? player.Name;
-            player.CurrentQuestionIndex = questionIndex ?? player.CurrentQuestionIndex;
-            room.Players[connectionId] = player;
-        }
-
-        if (status == PlayerStatus.ReadyForGame && room.Players.Count() == MaxPlayers)
-        {
-            room.ReadyForGame = room.Players.Values.All(p => p.Status == PlayerStatus.ReadyForGame);
-        }
-
         return room;
     }
 
@@ -132,12 +111,38 @@ public class RoomManager : IRoomManager
                 if (winner == false)
                 {
                     room = await SetPlayerStatesAsync(connectionId, null, player.CurrentQuestionIndex, PlayerStatus.GameWinner);
-                    if(room != null && player.Name != null)
+                    if (room != null && player.Name != null)
                         room.GameWinner = player.Name;
                 }
             }
         }
 
         return (isCorrect, room, nextQuiz);
+    }
+
+    private async Task<GameRoom?> SetPlayerStatesAsync(string connectionId, string? playerName, int? questionIndex, PlayerStatus? status)
+    {
+        var room = await GetRoomByConnectionAsync(connectionId);
+        if (room == null) { return null; }
+
+        if (room.Players.TryGetValue(connectionId, out var player))
+        {
+            player.Status = status ?? player.Status;
+            player.Name = playerName ?? player.Name;
+            player.CurrentQuestionIndex = questionIndex ?? player.CurrentQuestionIndex;
+            room.Players[connectionId] = player;
+        }
+
+        if (status == PlayerStatus.ReadyForGame && room.Players.Count() == MaxPlayers)
+        {
+            room.ReadyForGame = room.Players.Values.All(p => p.Status == PlayerStatus.ReadyForGame);
+        }
+
+        return room;
+    }
+    
+    public async Task<GameRoom?> FindARoomAsync(string connectionId)
+    {
+        return Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId) && !r.IsGameStarted && !r.ReadyForGame && string.IsNullOrEmpty(r.GameWinner));
     }
 }

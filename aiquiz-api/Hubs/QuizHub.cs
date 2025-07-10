@@ -87,9 +87,14 @@ namespace aiquiz_api.Hubs
                             {
                                 latestRoom.IsGameStarted = true;
                                 _logger.LogDebug("send first question to user");
+                                latestRoom.ReadyForGame = true;
                                 // Now send question to the group (only ready players remain)
                                 await clients.Group(roomId).SendAsync("ReceiveQuestion", questionsCopy[0]);
                                 logger.LogDebug("Removed not-ready players and sent first question to group {RoomId} after countdown", roomId);
+                            }
+                            else
+                            {
+                                _logger.LogDebug("room not found");
                             }
                         }
                         catch (Exception ex)

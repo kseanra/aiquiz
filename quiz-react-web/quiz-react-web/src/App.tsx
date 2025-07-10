@@ -196,7 +196,7 @@ function App() {
       )}
       <div style={{ marginTop: lastPong ? 40 : 0 }}>
         {/* Countdown timer display */}
-        {countdown !== null && countdown > 0 && (
+        {!question && countdown !== null && countdown > 0 && (
           <div className="countdown-timer">
             <span>Game starting in: <strong>{countdown}</strong> second{countdown === 1 ? '' : 's'}...</span>
           </div>
