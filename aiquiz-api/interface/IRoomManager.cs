@@ -3,8 +3,9 @@ using aiquiz_api.Models;
 
 public interface IRoomManager
 {
-    Task<GameRoom> JoinRoomAsync(string connectionId);
+    Task<GameRoom> JoinRoomAsync(string connectionId, PlayerState player);
     Task LeaveRoomAsync(string connectionId);
+    GameRoom GetGameRoomById(string roomId);
     Task<GameRoom?> GetRoomByConnectionAsync(string connectionId);
     Task<GameRoom?> SetPlayerReadyAsync(string connectionId, string? name = null);
     Task<GameRoom?> SetPlayerQuestionAsync(string connectionId, int questionIndex);

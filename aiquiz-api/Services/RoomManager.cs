@@ -10,10 +10,19 @@ public class RoomManager : IRoomManager
     {
         _logger = logger;
     }
-
-    public async Task<GameRoom> JoinRoomAsync(string connectionId)
+    public GameRoom GetGameRoomById(string roomId)
     {
-        var room = await FindARoomAsync(connectionId);
+        return Rooms[roomId];
+    }
+
+    /// <summary>
+    /// Assigned player to game room
+    /// </summary>
+    /// <param name="connectionId"></param>
+    /// <returns></returns>
+    public async Task<GameRoom> JoinRoomAsync(string connectionId, PlayerState player)
+    {
+        var room = await FindAvailableGameRoomAsync();
         if (room == null)
         {
             _logger.LogDebug("Create a new game room");
@@ -21,8 +30,8 @@ public class RoomManager : IRoomManager
             Rooms[room.RoomId] = room;
         }
 
-        room.Players[connectionId] = new PlayerState { ConnectionId = connectionId, Status = PlayerStatus.JustJoined };
-
+        room.Players[connectionId] = new PlayerState { ConnectionId = connectionId, Name = player.Name, Status = PlayerStatus.ReadyForGame };
+        room.ReadyForGame = room.Players.Count() == MaxPlayers;
         return room;
     }
 
@@ -41,7 +50,9 @@ public class RoomManager : IRoomManager
 
     public async Task<GameRoom?> GetRoomByConnectionAsync(string connectionId)
     {
-        return Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId)) ?? Rooms.Values.FirstOrDefault(r => r.Players.Count < MaxPlayers);
+        return await Task.Run(() =>
+            Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId)) ?? Rooms.Values.FirstOrDefault(r => r.Players.Count < MaxPlayers)
+        );
     }
 
     public async Task<GameRoom?> SetPlayerReadyAsync(string connectionId, string? name = null)
@@ -83,7 +94,7 @@ public class RoomManager : IRoomManager
         if (player == null) return (false, null, null);
 
         bool isCorrect = false;
-        Quiz nextQuiz = null;
+        Quiz? nextQuiz = null;
         // Check if the answer is correct
         if (player.CurrentQuestionIndex < room.Questions.Count)
         {
@@ -133,16 +144,13 @@ public class RoomManager : IRoomManager
             room.Players[connectionId] = player;
         }
 
-        if (status == PlayerStatus.ReadyForGame && room.Players.Count() == MaxPlayers)
-        {
-            room.ReadyForGame = room.Players.Values.All(p => p.Status == PlayerStatus.ReadyForGame);
-        }
-
         return room;
     }
     
-    public async Task<GameRoom?> FindARoomAsync(string connectionId)
+    public async Task<GameRoom?> FindAvailableGameRoomAsync()
     {
-        return Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId) && !r.IsGameStarted && !r.ReadyForGame && string.IsNullOrEmpty(r.GameWinner));
+        return await Task.Run(() =>
+            Rooms.Values.FirstOrDefault(r => !r.IsGameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < MaxPlayers)
+        );
     }
 }
