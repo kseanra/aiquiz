@@ -15,6 +15,7 @@ namespace aiquiz_api.Hubs
         private readonly ILogger<QuizHub> _logger;
         private readonly IQuizManager _quizManager;
         private readonly IRoomManager _roomManager;
+        private readonly int GameStarIn = 10000;
 
         public QuizHub(ILogger<QuizHub> logger, IQuizManager quizManager, IRoomManager roomManager, IHubContext<QuizHub> hubContext)
         {
@@ -51,19 +52,11 @@ namespace aiquiz_api.Hubs
         {
             if (!string.IsNullOrWhiteSpace(topic))
             {
-                //var quizs = await _quizManager.GenerateQuizAsync(topic, Math.Min(numQuestions ?? 4, 20));
-                //var gameRoom = await _roomManager.SetQuizAsync(Context.ConnectionId, quizs);
                 var gameRoom = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
-                // Send start countdown event to all players in the room (e.g., 60 seconds)
                 if (gameRoom?.ReadyForGame == true)
                 {
-                    //await StartGame(gameRoom);
-                    await StartGameAfterCountdown(gameRoom, topic); 
+                    StartGameAfterCountdown(gameRoom, topic); 
                 }
-                // else
-                // {
-                //     await StartGameAfterCountdown(gameRoom, topic);
-                // }
             }
         }
 
@@ -110,12 +103,12 @@ namespace aiquiz_api.Hubs
             var room = await _roomManager.JoinRoomAsync(Context.ConnectionId, player);
             if (room != null)
             {
-                _logger.LogInformation("Player {ConnectionId} joined room {RoomId}", Context.ConnectionId, room.RoomId);
+                _logger.LogInformation("Player {Name} {ConnectionId} joined room {RoomId}",player.Name, Context.ConnectionId, room.RoomId);
                 await Groups.AddToGroupAsync(Context.ConnectionId, room.RoomId);
             }
             else
             {
-                _logger.LogWarning("Failed to join room for Player {ConnectionId}", Context.ConnectionId);
+                _logger.LogWarning("Failed to join room for Player {Name} {ConnectionId}", player.Name, Context.ConnectionId);
             }
 
             return room;
@@ -168,10 +161,10 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        private async Task StartGameAfterCountdown(GameRoom? gameRoom, string topic, int? numQuestions = 4)
+        private void StartGameAfterCountdown(GameRoom? gameRoom, string topic, int? numQuestions = 4)
         {
             _logger.LogDebug("Send countdown to client");
-            // Schedule game start after 60 seconds
+             if (gameRoom == null) return;
             var roomId = gameRoom.RoomId;
             var questionsCopy = gameRoom.Questions.ToList();
             var logger = _logger;
@@ -182,12 +175,14 @@ namespace aiquiz_api.Hubs
             {
                 try
                 {
-                    await hubContext.Clients.Group(gameRoom?.RoomId).SendAsync("StartCountdown", 10);
+                    var preGameIn = DateTime.Now.Millisecond;
+                    await hubContext.Clients.Group(gameRoom.RoomId).SendAsync("StartCountdown", GameStarIn / 1000);
                     var quizs = await quizManager.GenerateQuizAsync(topic, Math.Min(numQuestions ?? 4, 20));
                     var room = roomManager.GetGameRoomById(roomId);
                     room.Questions = quizs;
                     if (room != null && room.RoomId == roomId && quizs.Count > 0 && !room.IsGameStarted)
                     {
+                        await Task.Delay(GameStarIn - (DateTime.Now.Millisecond - preGameIn));
                         logger.LogDebug("send first question to user");
                         room.IsGameStarted = true;
                         room.ReadyForGame = true;

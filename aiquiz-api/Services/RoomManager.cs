@@ -42,9 +42,13 @@ public class RoomManager : IRoomManager
         {
             room.Players.TryRemove(connectionId, out _);
             _logger.LogDebug("Remove player {player}", connectionId);
+
+            //Delete game room
             if (!room.Players.Any())
+            {
                 _logger.LogDebug("Remove game room {id}", room.RoomId);
-            Rooms.TryRemove(room.RoomId, out _); // Remove room if no players left
+                Rooms.TryRemove(room.RoomId, out _); // Remove room if no players left
+            }
         }
     }
 
@@ -99,7 +103,7 @@ public class RoomManager : IRoomManager
         if (player.CurrentQuestionIndex < room.Questions.Count)
         {
             var currentQuestion = room.Questions[player.CurrentQuestionIndex];
-            _logger.LogInformation("Player is on Question {indx}", player.CurrentQuestionIndex);
+            _logger.LogInformation("Player {name} is on Question {indx}", player.Name, player.CurrentQuestionIndex);
             _logger.LogInformation("Mark Question: {question}", currentQuestion.Question);
             _logger.LogInformation("Correct Answer is {answer}", currentQuestion.Answer);
             _logger.LogInformation("User Submit is {answer}", answer);
@@ -108,9 +112,9 @@ public class RoomManager : IRoomManager
 
         if (isCorrect)
         {
-            player.CurrentQuestionIndex++;
-            if (player.CurrentQuestionIndex < room.Questions.Count - 1)
+            if (player.CurrentQuestionIndex < room.Questions.Count - 1 )
             {
+                player.CurrentQuestionIndex++;
                 _logger.LogInformation("Set player Question index + 1");
                 await SetPlayerQuestionAsync(connectionId, player.CurrentQuestionIndex);
                 nextQuiz = room.Questions[player.CurrentQuestionIndex];
