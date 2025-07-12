@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import * as signalR from '@microsoft/signalr';
-import './App.css';
+import './App.scss';
 import { Console } from 'console';
 import { stringify } from 'querystring';
 
 const host = window.location.hostname; // dynamically resolves to localhost or IP
-const port = 5001;
-const HUB_URL = `https://${host}:${port}/quizhub`;
+const port = 5000;
+const HUB_URL = `http://${host}:${port}/quizhub`;
 
 function App() {
   const [name, setName] = useState('');
@@ -26,6 +26,8 @@ function App() {
   const [showSetTopic, setShowSetTopic] = useState(false);
   const [topicInput, setTopicInput] = useState('');
   const [numQuestions, setNumQuestions] = useState(4); // New state for number of questions
+  const [countdown, setCountdown] = useState<number | null>(null); // Countdown seconds left
+  const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Map status code to string
   const statusToString = (status: any) => {
@@ -55,6 +57,15 @@ function App() {
         return String(status);
     }
   };
+
+  // Clean up countdown interval on unmount
+  useEffect(() => {
+    return () => {
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+      }
+    };
+  }, []);
 
   const handleConnect = async () => {
     if (!name) return;
@@ -104,6 +115,34 @@ function App() {
 
     conn.on("RequestSetTopic", () => {
       setShowSetTopic(true);
+    });
+
+    // --- COUNTDOWN LOGIC ---
+    conn.on("StartCountdown", (totalSeconds: number) => {
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+      }
+      setCountdown(totalSeconds);
+      countdownInterval.current = setInterval(() => {
+        setCountdown(prev => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            if (countdownInterval.current) {
+              clearInterval(countdownInterval.current);
+            }
+            return null;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    });
+
+    // Optionally, handle server-side forced finish
+    conn.on("CountdownFinished", () => {
+      if (countdownInterval.current) {
+        clearInterval(countdownInterval.current);
+      }
+      setCountdown(null);
     });
 
     try {
@@ -156,6 +195,12 @@ function App() {
         </div>
       )}
       <div style={{ marginTop: lastPong ? 40 : 0 }}>
+        {/* Countdown timer display */}
+        {!question && countdown !== null && countdown > 0 && (
+          <div className="countdown-timer">
+            <span>Game starting in: <strong>{countdown}</strong> second{countdown === 1 ? '' : 's'}...</span>
+          </div>
+        )}
         {!connected ? (
           <form
             className='form-margin-top'
