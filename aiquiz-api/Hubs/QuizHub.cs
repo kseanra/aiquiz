@@ -43,9 +43,12 @@ namespace aiquiz_api.Hubs
         {
             if (!isReady) return;
             var gameRoom = await JoinRoom(_lobby[Context.ConnectionId]);
-            await SetTopic(gameRoom);
-            await StartGame(gameRoom);
-            await NotifyAllPlayer("PlayersStatus");
+            if (gameRoom != null)
+            {
+                _ = _lobby.Remove<string, PlayerState>(Context.ConnectionId, out PlayerState? player);
+                await SetTopic(gameRoom);
+                await NotifyAllPlayer("PlayersStatus");
+            }
         }
 
         public async Task SetQuizTopic(string topic, int? numQuestions)
@@ -55,7 +58,7 @@ namespace aiquiz_api.Hubs
                 var gameRoom = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
                 if (gameRoom?.ReadyForGame == true)
                 {
-                    StartGameAfterCountdown(gameRoom, topic); 
+                    StartGameAfterCountdown(gameRoom, topic, numQuestions); 
                 }
             }
         }
@@ -116,10 +119,19 @@ namespace aiquiz_api.Hubs
 
         private async Task SetTopic(GameRoom? gameRoom)
         {
-            // If this is the first player to mark ready, ask them to set the topic
-            if (gameRoom?.ReadyForGame == false  && gameRoom?.PlayerOneReady == true)
+            // when room is full can start game by asking user to set the topic
+            if (gameRoom?.ReadyForGame == true)
             {
-                await SendMessage("RequestSetTopic");
+                var player = gameRoom.GetRandomPlayer();
+                _logger.LogDebug("Send set topic to {Name}", player?.Name);
+                if (player != null && !string.IsNullOrEmpty(player.ConnectionId))
+                {
+                    await Clients.Client(player.ConnectionId).SendAsync("RequestSetTopic");
+                }
+                else
+                {
+                    _logger.LogWarning("Cannot send RequestSetTopic: player or ConnectionId is null");
+                }
             }
         }
 
