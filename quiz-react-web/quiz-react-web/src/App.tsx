@@ -151,11 +151,6 @@ function App() {
       setConnection(conn);
       setConnected(true);
       setReady(false);
-      // Start pinging every 1 second
-      // setInterval(() => {
-      //   if(!conn || conn.state !== signalR.HubConnectionState.Connected) return;
-      //     conn.invoke("Ping");
-      // }, 1000);
     } catch (error) {
       console.error("Connection failed: ", error);
       alert(`Failed to connect. Please try again. ${error}`);

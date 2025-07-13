@@ -34,14 +34,17 @@ namespace aiquiz_api.Hubs
 
         public async Task SubmitName(string name)
         {
-            await Task.Run(() =>
-                _lobby.AddOrUpdate(Context.ConnectionId, new PlayerState() { ConnectionId = Context.ConnectionId, Name = name }, (key, oldValue) => oldValue)
-            );
+            _logger.LogInformation("Client connected: {ConnectionId} set Name: {name}", Context.ConnectionId, name);
+            await Task.Run(() => {
+                var player = new PlayerState() { ConnectionId = Context.ConnectionId, Name = name };
+                _lobby.AddOrUpdate(Context.ConnectionId, player, (key, oldValue) => player);
+            });
         }
 
         public async Task ReadyForGame(bool isReady)
         {
             if (!isReady) return;
+            _logger.LogInformation("Client connected: {ConnectionId} is ready for games ", Context.ConnectionId);
             var gameRoom = await JoinRoom(_lobby[Context.ConnectionId]);
             if (gameRoom != null)
             {
@@ -55,6 +58,7 @@ namespace aiquiz_api.Hubs
         {
             if (!string.IsNullOrWhiteSpace(topic))
             {
+                _logger.LogInformation("Client connected: {ConnectionId} set game topic: {topic}", Context.ConnectionId, topic);
                 var gameRoom = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
                 if (gameRoom?.ReadyForGame == true)
                 {
@@ -66,7 +70,7 @@ namespace aiquiz_api.Hubs
         public async Task SubmitAnswer(string answer)
         {
             var (isCorrect, gameRoom, quiz) = await _roomManager.MarkAnswer(Context.ConnectionId, answer);
-
+            _logger.LogDebug("Client {Connection} Submit Answer {answer}", Context.ConnectionId, answer);
             if (isCorrect)
             {
                 // Send the next question if not last question
@@ -76,6 +80,7 @@ namespace aiquiz_api.Hubs
                 }
                 else
                 {
+                    _logger.LogDebug("Game Over");
                     await NotifyAllPlayer("GameOver");
                 }
             }
@@ -163,16 +168,6 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        private async Task StartGame(GameRoom? gameRoom)
-        {
-            if (gameRoom?.ReadyForGame == true && gameRoom?.IsGameStarted == false && gameRoom.Questions.Count > 0)
-            {
-                _logger.LogInformation("All Players are ready for the game");
-                await SendGroupMessage("ReceiveQuestion", gameRoom.Questions[0]);
-                _logger.LogInformation("Send Question : {Index} to All Players.", 0);
-            }
-        }
-
         private void StartGameAfterCountdown(GameRoom? gameRoom, string category, int? numQuestions = 4)
         {
             _logger.LogDebug("Send countdown to client");
@@ -207,7 +202,6 @@ namespace aiquiz_api.Hubs
                         room.ReadyForGame = true;
                         // Now send question to the group (only ready players remain)
                         await hubContext.Clients.Group(roomId).SendAsync("ReceiveQuestion", room.Questions[0]);
-                        logger.LogDebug("Removed not-ready players and sent first question to group {RoomId} after countdown", roomId);
                     }
                     else
                     {

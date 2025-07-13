@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Text.Json;
 using aiquiz_api.Models;
 
 public class RoomManager : IRoomManager
@@ -27,11 +28,13 @@ public class RoomManager : IRoomManager
         {
             _logger.LogDebug("Create a new game room");
             room = new GameRoom { RoomId = $"room-{Guid.NewGuid()}" };
-            Rooms[room.RoomId] = room;
+            Rooms.AddOrUpdate(room.RoomId, room, (key, oldValue) => room);
         }
 
-        room.Players[connectionId] = new PlayerState { ConnectionId = connectionId, Name = player.Name, Status = PlayerStatus.ReadyForGame };
+        player.Status = PlayerStatus.ReadyForGame;
+        room.Players.AddOrUpdate(connectionId, player, (key, oldValue) => player );
         room.ReadyForGame = room.Players.Count() == MaxPlayers;
+        //_logger.LogDebug(JsonSerializer.Serialize(Rooms));
         return room;
     }
 
@@ -153,8 +156,10 @@ public class RoomManager : IRoomManager
     
     public async Task<GameRoom?> FindAvailableGameRoomAsync()
     {
-        return await Task.Run(() =>
-            Rooms.Values.FirstOrDefault(r => !r.IsGameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < MaxPlayers)
+        return await Task.Run(() => {
+                _logger.LogDebug("Find available game rooom : {rooms}", JsonSerializer.Serialize(Rooms));
+                return Rooms.Values.FirstOrDefault(r => !r.IsGameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < MaxPlayers);
+            }
         );
     }
 }
