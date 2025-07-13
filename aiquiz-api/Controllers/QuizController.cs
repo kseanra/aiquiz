@@ -31,12 +31,19 @@ namespace aiquiz_api.Controllers
             _quizManager = quizManager;
         }
 
+
+        /// <summary>
+        /// Get Quiz
+        /// </summary>
+        /// <param name="topic"></param>
+        /// <param name="numQuestions"></param>
+        /// <returns></returns>
         [HttpGet("GetQuiz")]
-        public async Task<IActionResult> GetQuiz([FromQuery] string topic = "general knowledge", [FromQuery] int numQuestions = 4)
+        public async Task<IActionResult> GetQuiz([FromQuery] string category = "general knowledge", [FromQuery] int numQuestions = 4)
         {
-            if (string.IsNullOrWhiteSpace(topic))
+            if (string.IsNullOrWhiteSpace(category))
             {
-                return BadRequest("Topic cannot be empty.");
+                return BadRequest("Category cannot be empty.");
             }
 
             if (numQuestions < 1)
@@ -44,8 +51,19 @@ namespace aiquiz_api.Controllers
                 numQuestions = 4; // Default to 4 questions if invalid number is provided
             }
 
-            var quiz = await _quizManager.GenerateQuizAsync(topic, numQuestions);
+            var quiz = await _quizManager.GenerateQuizForCategoryAsync(category, numQuestions);
             return Ok(quiz);
+        }
+
+        /// <summary>
+        /// Get topic
+        /// </summary>
+        /// <returns></returns>
+        [HttpGet("GetTopic")]
+        public async Task<IActionResult> GetTopic([FromQuery] string? category)
+        {
+            var topics = await _quizManager.GenerateQuizTopicsAsync(category);
+            return Ok(topics);
         }
     }
 }
