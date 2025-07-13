@@ -11,11 +11,13 @@ namespace aiquiz_api.Services
     public class QuizManager : IQuizManager
     {
         private readonly ChatClient _chatClient;
+        private readonly ILogger<QuizManager> _logger;
 
-        public QuizManager(IConfiguration configuration)
+        public QuizManager(IConfiguration configuration, ILogger<QuizManager> logger)
         {
+            _logger = logger;
             var azureConfig = configuration.GetSection("AzureOpenAI");
-            var endpointStr =  Environment.GetEnvironmentVariable("AzureOpenAIEndpoint") ??  azureConfig["Endpoint"] ;
+            var endpointStr = Environment.GetEnvironmentVariable("AzureOpenAIEndpoint") ?? azureConfig["Endpoint"];
             var deploymentName = Environment.GetEnvironmentVariable("DeploymentName") ?? azureConfig["DeploymentName"];
             var apiKey = Environment.GetEnvironmentVariable("ApiKey") ?? azureConfig["ApiKey"];
 
@@ -29,19 +31,66 @@ namespace aiquiz_api.Services
             _chatClient = azureClient.GetChatClient(deploymentName);
         }
 
-        public async Task<List<Quiz>> GenerateQuizAsync(string topic, int numQuestions)
+        public async Task<List<string>> GenerateQuizTopicsAsync(string? category = default)
         {
-            if (numQuestions < 1) numQuestions = 4;
+            var chat = string.IsNullOrEmpty(category) ? "Generate 100 topics of quizzes? Only return json serialized List of string." :
+                $"enerate 100 topics of quizzes base on catory {category}? Only return json serialized List of string.";
             List<ChatMessage> messages = new List<ChatMessage>()
             {
-                new UserChatMessage($"Generate {numQuestions} quizs about {topic}?, with 4 options and the correct answer. Only return json serialized string of object {{ Question: string,  Options: string[] Answer: string. }}, Each time I run this, the questions should be different."),
+                new UserChatMessage(chat),
             };
-
-            var response = await _chatClient.CompleteChatAsync(messages);
-            return GetQuizzesFromResponse(response.Value.Content[0].Text);
+            _logger.LogDebug(chat);
+            return await RetryAsync(async () =>
+            {
+                var response = await _chatClient.CompleteChatAsync(messages);
+                return GetResponse<List<string>>(response.Value.Content[0].Text);
+            }, result => result.Count > 0, 3, 500, "Quiz generation");
         }
 
-        public List<Quiz> GetQuizzesFromResponse(string response)
+        public async Task<List<Quiz>> GenerateQuizForCategoryAsync(string category, int numQuestions)
+        {
+            var topics = await GenerateQuizTopicsAsync(category);
+            var rnd = new Random();
+            topics = topics.OrderBy(x => rnd.Next()).Take(20).ToList();
+            var quiz = await GenerateQuizAsync(topics, numQuestions * 4); // generate more quizzes
+            quiz = quiz.OrderBy(x => rnd.Next()).Take(numQuestions).ToList(); // randomly take questions
+            return quiz;
+        }
+
+        public async Task<List<Quiz>> GenerateQuizAsync(List<string> topics, int numQuestions)
+        {
+            if (numQuestions < 1) numQuestions = 4;
+            var chat = $"Generate {numQuestions} quizzes that bases on the following list of topics: {string.Join(",", topics)}?, with 4 options and the correct answer, the correct answer must be one of 4 options. Only return json serialized string of object {{ Question: string,  Options: string[] Answer: string. }}, Each time I run this, the questions should be different.";
+            List<ChatMessage> messages = new List<ChatMessage>()
+            {
+                new UserChatMessage(chat),
+            };
+            _logger.LogDebug(chat);
+            return await RetryAsync(async () =>
+            {
+                var response = await _chatClient.CompleteChatAsync(messages);
+                return GetResponse<List<Quiz>>(response.Value.Content[0].Text);
+            }, result => result.Count > 0, 3, 500, "Quiz generation");
+        }
+
+        // Generic retry helper for async operations
+        private async Task<T> RetryAsync<T>(Func<Task<T>> action, Func<T, bool> successCondition, int maxRetries, int delayMs, string operationName)
+        {
+            for (int attempt = 0; attempt < maxRetries; attempt++)
+            {
+                var result = await action();
+                if (successCondition(result))
+                {
+                    return result;
+                }
+                _logger.LogWarning($"{operationName} attempt {attempt + 1} did not meet success condition. Retrying...");
+                await Task.Delay(delayMs);
+            }
+            _logger.LogError($"{operationName} failed after {maxRetries} attempts. Returning default value.");
+            return default!;
+        }
+
+        public T GetResponse<T>(string response)
         {
             try
             {
@@ -53,21 +102,20 @@ namespace aiquiz_api.Services
                     jsonString = jsonString.Substring(4);
                 // Remove the code block formatting
 
-                var quizzes = JsonSerializer.Deserialize<List<Quiz>>(jsonString ?? "[]") ?? new List<Quiz>();
-                return quizzes;
+                var result = JsonSerializer.Deserialize<T>(jsonString ?? "[]");
+                return result ?? Activator.CreateInstance<T>();
             }
             catch (JsonException ex)
             {
                 // Handle JSON parsing errors
-                Console.WriteLine($"Error parsing JSON response: {ex.Message}");
-                return new List<Quiz>();
+                _logger.LogDebug($"Error parsing JSON response: {ex.Message}");
             }
             catch (Exception ex)
             {
                 // Handle any other exceptions
-                Console.WriteLine($"An error occurred: {ex.Message}");
-                return new List<Quiz>();
+                _logger.LogDebug($"An error occurred: {ex.Message}");
             }
+            return Activator.CreateInstance<T>();
         }
     }
 }

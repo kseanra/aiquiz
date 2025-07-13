@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Xunit;
 using Moq;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace aiquiz_api_tests
 {
@@ -20,9 +21,10 @@ namespace aiquiz_api_tests
 
             var mockConfig = new Mock<IConfiguration>();
             mockConfig.Setup(x => x.GetSection("AzureOpenAI")).Returns(azureOpenAISection.Object);
+            var mockLogger = new Mock<ILogger<QuizManager>>();
 
-            var quizManager = new QuizManager(mockConfig.Object);
-            var quizzes = quizManager.GetQuizzesFromResponse(response);
+            var quizManager = new QuizManager(mockConfig.Object, mockLogger.Object);
+            var quizzes = quizManager.GetResponse<List<Quiz>>(response);
 
             Assert.Equal(4, quizzes.Count);
             Assert.Equal("Who won the NBA MVP award in 2021?", quizzes[0].Question);

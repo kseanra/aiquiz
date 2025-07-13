@@ -15,7 +15,7 @@ namespace aiquiz_api.Hubs
         private readonly ILogger<QuizHub> _logger;
         private readonly IQuizManager _quizManager;
         private readonly IRoomManager _roomManager;
-        private readonly int GameStarIn = 10000;
+        private readonly double GameStarIn = 30000;
 
         public QuizHub(ILogger<QuizHub> logger, IQuizManager quizManager, IRoomManager roomManager, IHubContext<QuizHub> hubContext)
         {
@@ -173,7 +173,7 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        private void StartGameAfterCountdown(GameRoom? gameRoom, string topic, int? numQuestions = 4)
+        private void StartGameAfterCountdown(GameRoom? gameRoom, string category, int? numQuestions = 4)
         {
             _logger.LogDebug("Send countdown to client");
              if (gameRoom == null) return;
@@ -183,19 +183,26 @@ namespace aiquiz_api.Hubs
             var roomManager = _roomManager;
             var hubContext = _hubContext;
             var quizManager = _quizManager;
+            var numberOfQuestion = numQuestions ?? 4;
             _ = Task.Run(async () =>
             {
                 try
                 {
-                    var preGameIn = DateTime.Now.Millisecond;
+                    var questionGeneratedStarted = DateTime.Now;
+                    _logger.LogDebug($"Generating question started: {questionGeneratedStarted}");
                     await hubContext.Clients.Group(gameRoom.RoomId).SendAsync("StartCountdown", GameStarIn / 1000);
-                    var quizs = await quizManager.GenerateQuizAsync(topic, Math.Min(numQuestions ?? 4, 20));
                     var room = roomManager.GetGameRoomById(roomId);
-                    room.Questions = quizs;
-                    if (room != null && room.RoomId == roomId && quizs.Count > 0 && !room.IsGameStarted)
+                    room.Questions = await _quizManager.GenerateQuizForCategoryAsync(category, numberOfQuestion);;
+                    var questionGeneratedCompleted = DateTime.Now;
+                    _logger.LogDebug($"Generating questions completed: {questionGeneratedCompleted}");
+                    if (room != null && room.RoomId == roomId && room.Questions.Count > 0 && !room.IsGameStarted)
                     {
-                        await Task.Delay(GameStarIn - (DateTime.Now.Millisecond - preGameIn));
-                        logger.LogDebug("send first question to user");
+                        var diff = (questionGeneratedCompleted - questionGeneratedStarted).TotalMilliseconds;
+                        logger.LogDebug($"time diff is {diff}");
+                        var delaySeconds = GameStarIn - diff ;
+                        logger.LogDebug($"Delay at {delaySeconds}");
+                        await Task.Delay((int)delaySeconds);
+                        logger.LogDebug($"Send first question to user");
                         room.IsGameStarted = true;
                         room.ReadyForGame = true;
                         // Now send question to the group (only ready players remain)
