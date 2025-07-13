@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
 using System.Text.Json;
 
-int connectionCount = 10; // Change this to the number of connections you want
+int connectionCount = 30; // Change this to the number of connections you want
 List<Task> connectionTasks = new();
 
 for (int i = 0; i < connectionCount; i++)
@@ -81,7 +81,7 @@ for (int i = 0; i < connectionCount; i++)
     connectionTasks.Add(
         Task.Run(async () =>
         {
-            await Task.Delay(new Random().Next(2000, 10000));
+            await Task.Delay(new Random().Next(1000, 2000));
             await connection.StartAsync();
             await Task.Delay(500);
             await connection.InvokeAsync("SubmitName", $"Bot_{Guid.NewGuid()}");
@@ -91,3 +91,5 @@ for (int i = 0; i < connectionCount; i++)
 }
 
 await Task.WhenAll(connectionTasks);
+
+await Task.Delay(-1);

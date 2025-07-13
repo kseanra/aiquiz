@@ -80,7 +80,7 @@ namespace aiquiz_api.Hubs
                 }
                 else
                 {
-                    _logger.LogDebug("Game Over");
+                    _logger.LogInformation("Game Over");
                     await NotifyAllPlayer("GameOver");
                 }
             }
@@ -111,12 +111,12 @@ namespace aiquiz_api.Hubs
             var room = await _roomManager.JoinRoomAsync(Context.ConnectionId, player);
             if (room != null)
             {
-                _logger.LogInformation("Player {Name} {ConnectionId} joined room {RoomId}",player.Name, Context.ConnectionId, room.RoomId);
+                _logger.LogInformation("Player {Name}: {ConnectionId} joined room {RoomId}",player.Name, Context.ConnectionId, room.RoomId);
                 await Groups.AddToGroupAsync(Context.ConnectionId, room.RoomId);
             }
             else
             {
-                _logger.LogWarning("Failed to join room for Player {Name} {ConnectionId}", player.Name, Context.ConnectionId);
+                _logger.LogWarning("Failed to join room for Player {Name}: {ConnectionId}", player.Name, Context.ConnectionId);
             }
 
             return room;
@@ -146,16 +146,7 @@ namespace aiquiz_api.Hubs
             if (room != null)
             {
                 await Clients.Caller.SendAsync(message, data);
-                _logger.LogInformation("Send Message {message} to {connectionId} with data {data}", message, Context.ConnectionId, data);
-            }
-        }
-
-        private async Task SendGroupMessage(string message, object? data = null)
-        {
-            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
-            if (room != null)
-            {
-                await Clients.Group(room.RoomId).SendAsync(message, data);
+                _logger.LogDebug("Send Message {message} to {connectionId} with data {data}", message, Context.ConnectionId, data);
             }
         }
 
