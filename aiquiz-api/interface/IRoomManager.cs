@@ -3,7 +3,7 @@ using aiquiz_api.Models;
 
 public interface IRoomManager
 {
-    Task<GameRoom> JoinRoomAsync(string connectionId, PlayerState player);
+    GameRoom JoinRoomAsync(string connectionId, PlayerState player);
     Task LeaveRoomAsync(string connectionId);
     GameRoom GetGameRoomById(string roomId);
     Task<GameRoom?> GetRoomByConnectionAsync(string connectionId);
@@ -13,4 +13,6 @@ public interface IRoomManager
     Task<GameRoom?> SetPlayerNameAsync(string connectionId, string playerName);
     Task<GameRoom?> SetQuizAsync(string connectionId, List<Quiz> questions);
     Task<(bool, GameRoom?, Quiz?)> MarkAnswer(string connectionId, string answer);
+    GameRoom? SetGameRoomStatus(string roomId, RoomStatus roomStatus);
+    bool GameRoomClosed(string roomId);
 }

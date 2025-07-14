@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using aiquiz_api.Models;
 
 public class RoomManager : IRoomManager
@@ -23,24 +24,27 @@ public class RoomManager : IRoomManager
     /// </summary>
     /// <param name="connectionId"></param>
     /// <returns></returns>
-    public async Task<GameRoom> JoinRoomAsync(string connectionId, PlayerState player)
+    public GameRoom JoinRoomAsync(string connectionId, PlayerState player)
     {
-        var room = await FindAvailableGameRoomAsync();
-        if (room == null)
+        lock (gloabLock)
         {
-            lock (gloabLock)
+            var room = FindAvailableGameRoomAsync();
+            if (room == null)
             {
                 room = new GameRoom { RoomId = $"room-{Guid.NewGuid()}" };
                 Rooms.AddOrUpdate(room.RoomId, room, (key, oldValue) => room);
                 _logger.LogInformation("Create a new game room: {id}", room.RoomId);
             }
+            player.Status = PlayerStatus.ReadyForGame;
+            var lockObj = keyLocks.GetOrAdd(room.RoomId, _ => new object());
+            lock (lockObj)
+            {
+                room.Players.AddOrUpdate(connectionId, player, (key, oldValue) => player);
+                room.Status = room.Players.Count() == MaxPlayers ? RoomStatus.Ready : room.Status;
+                _logger.LogInformation("Player {name} add to game room {id}", player.Name, room.RoomId);
+                return room;
+            }
         }
-
-        player.Status = PlayerStatus.ReadyForGame;
-        room.Players.AddOrUpdate(connectionId, player, (key, oldValue) => player );
-        room.ReadyForGame = room.Players.Count() == MaxPlayers;
-        //_logger.LogInformation("Player {name} add to game room {id}", player.Name, room.RoomId);
-        return room;
     }
 
     public async Task LeaveRoomAsync(string connectionId)
@@ -115,6 +119,34 @@ public class RoomManager : IRoomManager
         return room;
     }
 
+    public bool GameRoomClosed(string roomId)
+    {
+        var lockObj = keyLocks.GetOrAdd(roomId, _ => new object());
+        lock (lockObj)
+        {
+            return Rooms[roomId].Status == RoomStatus.Close;
+        }
+    }
+
+    public GameRoom? SetGameRoomStatus(string roomId, RoomStatus roomStatus)
+    {
+        var lockObj = keyLocks.GetOrAdd(roomId, _ => new object());
+        lock (lockObj)
+        {
+            if (roomStatus == RoomStatus.Close && Rooms[roomId].Status != roomStatus)
+            {
+                _logger.LogInformation("Room {id} game over", roomId);
+                Rooms[roomId].Status = roomStatus;
+                _logger.LogInformation("Close Room {id}", roomId);
+            }
+            else
+            {
+                Rooms[roomId].Status = roomStatus;
+            }
+            return Rooms[roomId];
+        }
+    }
+
     public async Task<(bool, GameRoom?, Quiz?)> MarkAnswer(string connectionId, string answer)
     {
         var room = await GetRoomByConnectionAsync(connectionId);
@@ -132,13 +164,13 @@ public class RoomManager : IRoomManager
             _logger.LogDebug("Player {name} submited Q{index} answer: {answer}", player.Name, player.CurrentQuestionIndex, answer);
             _logger.LogDebug("Mark Question: {question}", currentQuestion.Question);
             _logger.LogDebug("Correct Answer is {answer}", currentQuestion.Answer);
-            
+
             isCorrect = string.Equals(answer?.Trim(), currentQuestion.Answer?.Trim(), StringComparison.OrdinalIgnoreCase);
         }
 
         if (isCorrect)
         {
-            if (player.CurrentQuestionIndex < room.Questions.Count - 1 )
+            if (player.CurrentQuestionIndex < room.Questions.Count - 1)
             {
                 player.CurrentQuestionIndex++;
                 _logger.LogDebug("Set player {name} in Question {index}", player.Name, player.CurrentQuestionIndex);
@@ -147,16 +179,15 @@ public class RoomManager : IRoomManager
             }
             else
             {
-                if (string.IsNullOrEmpty(room.GameWinner))
+                object lockObj = keyLocks.GetOrAdd(room.RoomId, _ => new object());
+                lock (lockObj)
                 {
-                    object lockObj = keyLocks.GetOrAdd(room.RoomId, _ => new object());
-                    lock (lockObj)
+                    room = GetGameRoomById(room.RoomId);
+                    if (room != null && player.Name != null && string.IsNullOrEmpty(room.GameWinner))
                     {
-                        if (room != null && player.Name != null)
-                        {
                             _logger.LogInformation("Set game room's {id} winner is : {name} ", room.RoomId, player.Name);
+                            _logger.LogDebug(JsonSerializer.Serialize(room));
                             room.GameWinner = player.Name;
-                        }
                     }
                 }
             }
@@ -181,16 +212,9 @@ public class RoomManager : IRoomManager
         return room;
     }
     
-    public async Task<GameRoom?> FindAvailableGameRoomAsync()
+    public GameRoom? FindAvailableGameRoomAsync()
     {
-        return await Task.Run(() =>
-        {
-            lock (gloabLock)
-            {
-                _logger.LogDebug("Find available game rooom : {rooms}", JsonSerializer.Serialize(Rooms));
-                return Rooms.Values.FirstOrDefault(r => !r.IsGameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < MaxPlayers);
-            }
-        }
-        );
+        _logger.LogDebug("Find available game rooom : {rooms}", JsonSerializer.Serialize(Rooms));
+        return Rooms.Values.FirstOrDefault(r => r.Status != RoomStatus.GameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < MaxPlayers);
     }
 }

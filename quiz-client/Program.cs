@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
 using System.Text.Json;
 
-int connectionCount = 30; // Change this to the number of connections you want
+int connectionCount = 20; // Change this to the number of connections you want
 List<Task> connectionTasks = new();
 
 for (int i = 0; i < connectionCount; i++)

@@ -49,12 +49,14 @@ namespace aiquiz_api.Services
 
         public async Task<List<Quiz>> GenerateQuizForCategoryAsync(string category, int numQuestions)
         {
-            var topics = await GenerateQuizTopicsAsync(category);
-            var rnd = new Random();
-            topics = topics.OrderBy(x => rnd.Next()).Take(20).ToList();
-            var quiz = await GenerateQuizAsync(topics, numQuestions * 4); // generate more quizzes
-            quiz = quiz.OrderBy(x => rnd.Next()).Take(numQuestions).ToList(); // randomly take questions
-            return quiz;
+            //var topics = await GenerateQuizTopicsAsync(category);
+            //var rnd = new Random();
+            //topics = topics.OrderBy(x => rnd.Next()).Take(20).ToList();
+            //var quiz = await GenerateQuizAsync(topics, numQuestions * 4); // generate more quizzes
+            //quiz = quiz.OrderBy(x => rnd.Next()).Take(numQuestions).ToList(); // randomly take questions
+            //return quiz;
+            _logger.LogInformation("Generate Question");
+            return await Task.Run(() => this.CreateMockData());
         }
 
         public async Task<List<Quiz>> GenerateQuizAsync(List<string> topics, int numQuestions)
@@ -117,5 +119,33 @@ namespace aiquiz_api.Services
             }
             return Activator.CreateInstance<T>();
         }
+
+        private List<Quiz> CreateMockData()
+        {
+            return new List<Quiz>()
+            {
+                new Quiz() {
+                    Question = "Test",
+                    Options = new List<string>() { "a", "b", "c", "d"},
+                    Answer = "a"
+                },
+                new Quiz() {
+                    Question = "Test",
+                    Options = new List<string>() { "a", "b", "c", "d"},
+                    Answer = "a"
+                },
+                new Quiz() {
+                    Question = "Test",
+                    Options = new List<string>() { "a", "b", "c", "d"},
+                    Answer = "a"
+                },
+                new Quiz() {
+                    Question = "Test",
+                    Options = new List<string>() { "a", "b", "c", "d"},
+                    Answer = "a"
+                }
+            };
+        }
+        
     }
 }

@@ -15,7 +15,7 @@ namespace aiquiz_api.Hubs
         private readonly ILogger<QuizHub> _logger;
         private readonly IQuizManager _quizManager;
         private readonly IRoomManager _roomManager;
-        private readonly double GameStarIn = 30000;
+        private readonly double GameStarIn = 5000;
 
         public QuizHub(ILogger<QuizHub> logger, IQuizManager quizManager, IRoomManager roomManager, IHubContext<QuizHub> hubContext)
         {
@@ -27,14 +27,15 @@ namespace aiquiz_api.Hubs
 
         public override async Task OnConnectedAsync()
         {
-            _logger.LogInformation("Client connected: {ConnectionId}", Context.ConnectionId);
-            await SendMessage("RequestName");
+            _logger.LogDebug("Client connected: {ConnectionId}", Context.ConnectionId);
+            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
+            await SendMessage(room, "RequestName");
             await base.OnConnectedAsync();
         }
 
         public async Task SubmitName(string name)
         {
-            _logger.LogInformation("Client connected: {ConnectionId} set Name: {name}", Context.ConnectionId, name);
+            _logger.LogDebug("Client connected: {ConnectionId} set Name: {name}", Context.ConnectionId, name);
             await Task.Run(() => {
                 var player = new PlayerState() { ConnectionId = Context.ConnectionId, Name = name };
                 _lobby.AddOrUpdate(Context.ConnectionId, player, (key, oldValue) => player);
@@ -44,13 +45,13 @@ namespace aiquiz_api.Hubs
         public async Task ReadyForGame(bool isReady)
         {
             if (!isReady) return;
-            _logger.LogInformation("Client connected: {ConnectionId} is ready for games ", Context.ConnectionId);
+            _logger.LogDebug("Client connected: {ConnectionId} is ready for games ", Context.ConnectionId);
             var gameRoom = await JoinRoom(_lobby[Context.ConnectionId]);
             if (gameRoom != null)
             {
                 _ = _lobby.Remove<string, PlayerState>(Context.ConnectionId, out PlayerState? player);
                 await SetTopic(gameRoom);
-                await NotifyAllPlayer("PlayersStatus");
+                await NotifyAllPlayer(gameRoom, "PlayersStatus");
             }
         }
 
@@ -60,7 +61,7 @@ namespace aiquiz_api.Hubs
             {
                 _logger.LogInformation("Client connected: {ConnectionId} set game topic: {topic}", Context.ConnectionId, topic);
                 var gameRoom = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
-                if (gameRoom?.ReadyForGame == true)
+                if (gameRoom?.Status == RoomStatus.Ready)
                 {
                     StartGameAfterCountdown(gameRoom, topic, numQuestions); 
                 }
@@ -76,22 +77,26 @@ namespace aiquiz_api.Hubs
                 // Send the next question if not last question
                 if (string.IsNullOrEmpty(gameRoom?.GameWinner))
                 {
-                    await SendMessage("ReceiveQuestion", quiz);
+                    await SendMessage(gameRoom, "ReceiveQuestion", quiz);
                 }
                 else
                 {
-                    _logger.LogInformation("Game Over");
-                    await NotifyAllPlayer("GameOver");
+                    if (!_roomManager.GameRoomClosed(gameRoom.RoomId))
+                    {
+                        await NotifyAllPlayer(gameRoom, "GameOver");
+                        _roomManager.SetGameRoomStatus(gameRoom.RoomId, RoomStatus.Close);
+                    }
                 }
             }
             else
             {
                 // Optionally, you can notify the player or let them retry
-                await SendMessage("IncorrectAnswer", 0);
+                await SendMessage(gameRoom,"IncorrectAnswer", 0);
             }
 
             // Notify all players about everyone's status
-            await NotifyAllPlayer("PlayersStatus");
+            if(gameRoom != null)
+                await NotifyAllPlayer(gameRoom, "PlayersStatus");
         }
 
         public async Task Ping()
@@ -108,10 +113,10 @@ namespace aiquiz_api.Hubs
 
         private async Task<GameRoom?> JoinRoom(PlayerState player)
         {
-            var room = await _roomManager.JoinRoomAsync(Context.ConnectionId, player);
+            var room = _roomManager.JoinRoomAsync(Context.ConnectionId, player);
             if (room != null)
             {
-                _logger.LogInformation("Player {Name}: {ConnectionId} joined room {RoomId}",player.Name, Context.ConnectionId, room.RoomId);
+                _logger.LogDebug("Player {Name}: {ConnectionId} joined room {RoomId}",player.Name, Context.ConnectionId, room.RoomId);
                 await Groups.AddToGroupAsync(Context.ConnectionId, room.RoomId);
             }
             else
@@ -125,7 +130,7 @@ namespace aiquiz_api.Hubs
         private async Task SetTopic(GameRoom? gameRoom)
         {
             // when room is full can start game by asking user to set the topic
-            if (gameRoom?.ReadyForGame == true)
+            if (gameRoom?.Status == RoomStatus.Ready)
             {
                 var player = gameRoom.GetRandomPlayer();
                 _logger.LogDebug("Send set topic to {Name}", player?.Name);
@@ -140,9 +145,8 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        private async Task SendMessage(string message, object? data = null)
+        private async Task SendMessage(GameRoom? room, string message, object? data = null)
         {
-            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
             if (room != null)
             {
                 await Clients.Caller.SendAsync(message, data);
@@ -150,9 +154,8 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        private async Task NotifyAllPlayer(string message)
+        private async Task NotifyAllPlayer(GameRoom room, string message)
         {
-            var room = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
             if (room != null)
             {
                 await Clients.Group(room.RoomId).SendAsync(message, room.Players.Values);
@@ -180,17 +183,18 @@ namespace aiquiz_api.Hubs
                     var room = roomManager.GetGameRoomById(roomId);
                     room.Questions = await _quizManager.GenerateQuizForCategoryAsync(category, numberOfQuestion);;
                     var questionGeneratedCompleted = DateTime.Now;
-                    _logger.LogDebug($"Generating questions completed: {questionGeneratedCompleted}");
-                    if (room != null && room.RoomId == roomId && room.Questions.Count > 0 && !room.IsGameStarted)
+                    _logger.LogInformation($"Generating questions completed: {questionGeneratedCompleted}");
+                    if (room != null && room.RoomId == roomId && room.Questions.Count > 0 && room.Status != RoomStatus.GameStarted)
                     {
                         var diff = (questionGeneratedCompleted - questionGeneratedStarted).TotalMilliseconds;
                         logger.LogDebug($"time diff is {diff}");
                         var delaySeconds = GameStarIn - diff ;
                         logger.LogDebug($"Delay at {delaySeconds}");
                         await Task.Delay((int)delaySeconds);
-                        logger.LogDebug($"Send first question to user");
-                        room.IsGameStarted = true;
-                        room.ReadyForGame = true;
+                        logger.LogInformation("Send first question to room {id} users", roomId);
+                        roomManager.SetGameRoomStatus(room.RoomId, RoomStatus.GameStarted);
+                        //room.IsGameStarted = true;
+                        //room.ReadyForGame = true;
                         // Now send question to the group (only ready players remain)
                         await hubContext.Clients.Group(roomId).SendAsync("ReceiveQuestion", room.Questions[0]);
                     }

@@ -4,6 +4,7 @@ public class GameRoom
 {
     public required string RoomId { get; set; }
     public bool IsGameStarted { get; set; } = false;
+    public RoomStatus Status { get; set; } = RoomStatus.Active;
     public ConcurrentDictionary<string, PlayerState> Players { get; set; } = new();
     public List<Quiz> Questions { get; set; } = new();
     public bool ReadyForGame { get; set; } = false;
@@ -19,4 +20,12 @@ public class GameRoom
         return playerList[idx];
     }
     public string? Topic { get; set; }
+}
+
+public enum RoomStatus
+{
+    Active,
+    Ready,
+    GameStarted,
+    Close
 }
