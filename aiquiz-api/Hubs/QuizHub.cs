@@ -1,10 +1,6 @@
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 using aiquiz_api.Models;
-using Microsoft.Extensions.Logging;
-using aiquiz_api.Services;
-using System.Linq.Expressions;
-using Microsoft.AspNetCore.Mvc;
 
 namespace aiquiz_api.Hubs
 {
@@ -183,7 +179,7 @@ namespace aiquiz_api.Hubs
                     var room = roomManager.GetGameRoomById(roomId);
                     room.Questions = await _quizManager.GenerateQuizForCategoryAsync(category, numberOfQuestion);;
                     var questionGeneratedCompleted = DateTime.Now;
-                    _logger.LogInformation($"Generating questions completed: {questionGeneratedCompleted}");
+                    _logger.LogDebug($"Generating questions completed: {questionGeneratedCompleted}");
                     if (room != null && room.RoomId == roomId && room.Questions.Count > 0 && room.Status != RoomStatus.GameStarted)
                     {
                         var diff = (questionGeneratedCompleted - questionGeneratedStarted).TotalMilliseconds;
@@ -191,10 +187,8 @@ namespace aiquiz_api.Hubs
                         var delaySeconds = GameStarIn - diff ;
                         logger.LogDebug($"Delay at {delaySeconds}");
                         await Task.Delay((int)delaySeconds);
-                        logger.LogInformation("Send first question to room {id} users", roomId);
+                        logger.LogDebug("Send first question to room {id} users", roomId);
                         roomManager.SetGameRoomStatus(room.RoomId, RoomStatus.GameStarted);
-                        //room.IsGameStarted = true;
-                        //room.ReadyForGame = true;
                         // Now send question to the group (only ready players remain)
                         await hubContext.Clients.Group(roomId).SendAsync("ReceiveQuestion", room.Questions[0]);
                     }

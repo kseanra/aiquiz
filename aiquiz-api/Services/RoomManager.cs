@@ -8,7 +8,7 @@ public class RoomManager : IRoomManager
     private static readonly ConcurrentDictionary<string, GameRoom> Rooms = new();
     private static readonly ConcurrentDictionary<string, object> keyLocks = new();
     private static readonly object gloabLock = new();
-    private const int MaxPlayers = 10; // Maximum number of players per room
+    private const int MaxPlayers = 20; // Maximum number of players per room
     private readonly ILogger<RoomManager> _logger;
     public RoomManager(ILogger<RoomManager> logger)
     {
@@ -41,7 +41,7 @@ public class RoomManager : IRoomManager
             {
                 room.Players.AddOrUpdate(connectionId, player, (key, oldValue) => player);
                 room.Status = room.Players.Count() == MaxPlayers ? RoomStatus.Ready : room.Status;
-                _logger.LogInformation("Player {name} add to game room {id}", player.Name, room.RoomId);
+                _logger.LogDebug("Player {name} add to game room {id}", player.Name, room.RoomId);
                 return room;
             }
         }
@@ -58,7 +58,7 @@ public class RoomManager : IRoomManager
             {
                 if (room.Players.TryRemove(connectionId, out var player))
                 {
-                    _logger.LogDebug("Try to remove player {player} from game room {id}", player?.Name, room.RoomId);
+                    _logger.LogDebug("Removing player {player} from game room {id}", player?.Name, room.RoomId);
 
                     //Delete game room
                     if (!room.Players.Any())
@@ -70,7 +70,7 @@ public class RoomManager : IRoomManager
                         }
                         else
                         {
-                            _logger.LogInformation("Game room {id} was removed", room.RoomId);
+                            _logger.LogInformation("Game room {id} removed", room.RoomId);
                         }
                     }
                 }
@@ -89,11 +89,6 @@ public class RoomManager : IRoomManager
         );
     }
 
-    public async Task<GameRoom?> SetPlayerReadyAsync(string connectionId, string? name = null)
-    {
-        return await SetPlayerStatesAsync(connectionId, name, null, PlayerStatus.ReadyForGame);
-    }
-
     public async Task<GameRoom?> SetPlayerQuestionAsync(string connectionId, int questionIndex)
     {
         return await SetPlayerStatesAsync(connectionId, null, questionIndex, null);
@@ -103,12 +98,6 @@ public class RoomManager : IRoomManager
     {
         return SetPlayerStatesAsync(connectionId, null, null, status);
     }
-
-    public Task<GameRoom?> SetPlayerNameAsync(string connectionId, string playerName)
-    {
-        return SetPlayerStatesAsync(connectionId, playerName, null, null);
-    }
-
 
     public async Task<GameRoom?> SetQuizAsync(string connectionId, List<Quiz> questions)
     {
@@ -137,7 +126,7 @@ public class RoomManager : IRoomManager
             {
                 _logger.LogInformation("Room {id} game over", roomId);
                 Rooms[roomId].Status = roomStatus;
-                _logger.LogInformation("Close Room {id}", roomId);
+                _logger.LogInformation("Room {id} closed!", roomId);
             }
             else
             {
@@ -185,7 +174,7 @@ public class RoomManager : IRoomManager
                     room = GetGameRoomById(room.RoomId);
                     if (room != null && player.Name != null && string.IsNullOrEmpty(room.GameWinner))
                     {
-                            _logger.LogInformation("Set game room's {id} winner is : {name} ", room.RoomId, player.Name);
+                            _logger.LogInformation("Set game room's {id} with player {count} winner is : {name} ", room.RoomId, room.Players.Count(), player.Name);
                             _logger.LogDebug(JsonSerializer.Serialize(room));
                             room.GameWinner = player.Name;
                     }

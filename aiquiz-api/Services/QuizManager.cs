@@ -125,22 +125,22 @@ namespace aiquiz_api.Services
             return new List<Quiz>()
             {
                 new Quiz() {
-                    Question = "Test",
+                    Question = "Question 1",
                     Options = new List<string>() { "a", "b", "c", "d"},
                     Answer = "a"
                 },
                 new Quiz() {
-                    Question = "Test",
+                    Question = "Question 2",
                     Options = new List<string>() { "a", "b", "c", "d"},
                     Answer = "a"
                 },
                 new Quiz() {
-                    Question = "Test",
+                    Question = "Question 3",
                     Options = new List<string>() { "a", "b", "c", "d"},
                     Answer = "a"
                 },
                 new Quiz() {
-                    Question = "Test",
+                    Question = "Question 4",
                     Options = new List<string>() { "a", "b", "c", "d"},
                     Answer = "a"
                 }
