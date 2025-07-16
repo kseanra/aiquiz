@@ -55,7 +55,7 @@ namespace aiquiz_api.Hubs
         {
             if (!string.IsNullOrWhiteSpace(topic))
             {
-                _logger.LogInformation("Client connected: {ConnectionId} set game topic: {topic}", Context.ConnectionId, topic);
+                _logger.LogDebug("Client connected: {ConnectionId} set game topic: {topic}", Context.ConnectionId, topic);
                 var gameRoom = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
                 if (gameRoom?.Status == RoomStatus.Ready)
                 {
@@ -175,19 +175,19 @@ namespace aiquiz_api.Hubs
                 {
                     var questionGeneratedStarted = DateTime.Now;
                     _logger.LogDebug($"Generating question started: {questionGeneratedStarted}");
-                    await hubContext.Clients.Group(gameRoom.RoomId).SendAsync("StartCountdown", GameStarIn / 1000);
+                    await hubContext.Clients.Group(roomId).SendAsync("StartCountdown", GameStarIn / 1000);
                     var room = roomManager.GetGameRoomById(roomId);
                     room.Questions = await _quizManager.GenerateQuizForCategoryAsync(category, numberOfQuestion);;
                     var questionGeneratedCompleted = DateTime.Now;
                     _logger.LogDebug($"Generating questions completed: {questionGeneratedCompleted}");
-                    if (room != null && room.RoomId == roomId && room.Questions.Count > 0 && room.Status != RoomStatus.GameStarted)
+                    if (room != null && room.Questions.Count > 0 && room.Status != RoomStatus.GameStarted)
                     {
                         var diff = (questionGeneratedCompleted - questionGeneratedStarted).TotalMilliseconds;
                         logger.LogDebug($"time diff is {diff}");
                         var delaySeconds = GameStarIn - diff ;
                         logger.LogDebug($"Delay at {delaySeconds}");
                         await Task.Delay((int)delaySeconds);
-                        logger.LogDebug("Send first question to room {id} users", roomId);
+                        logger.LogInformation("Send first question to room {id} users", roomId);
                         roomManager.SetGameRoomStatus(room.RoomId, RoomStatus.GameStarted);
                         // Now send question to the group (only ready players remain)
                         await hubContext.Clients.Group(roomId).SendAsync("ReceiveQuestion", room.Questions[0]);

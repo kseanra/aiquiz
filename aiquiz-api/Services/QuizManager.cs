@@ -55,7 +55,7 @@ namespace aiquiz_api.Services
             //var quiz = await GenerateQuizAsync(topics, numQuestions * 4); // generate more quizzes
             //quiz = quiz.OrderBy(x => rnd.Next()).Take(numQuestions).ToList(); // randomly take questions
             //return quiz;
-            _logger.LogInformation("Generate Question");
+            _logger.LogDebug("Generate Question");
             return await Task.Run(() => this.CreateMockData());
         }
 

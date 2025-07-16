@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using aiquiz_api.Models;
+using Microsoft.AspNetCore.Mvc;
 
 public class RoomManager : IRoomManager
 {
@@ -61,9 +62,9 @@ public class RoomManager : IRoomManager
                     _logger.LogDebug("Removing player {player} from game room {id}", player?.Name, room.RoomId);
 
                     //Delete game room
-                    if (!room.Players.Any())
+                    if (!room.Players.Any() && room.Status == RoomStatus.Close)
                     {
-                        _logger.LogInformation("Try to remove game room {id}", room.RoomId);
+                        _logger.LogDebug("Try to remove game room {id}", room.RoomId);
                         if (!Rooms.TryRemove(room.RoomId, out _))
                         {
                             _logger.LogError("Remove game room {id} failed", room.RoomId);
@@ -76,7 +77,7 @@ public class RoomManager : IRoomManager
                 }
                 else
                 {
-                    _logger.LogError("Remove player {name} from game room {id} failed", player?.Name, room.RoomId);
+                    _logger.LogError("Failed to Remove room {id} : {status}", room.RoomId, room.Status);
                 }
             }
         }
@@ -89,14 +90,14 @@ public class RoomManager : IRoomManager
         );
     }
 
-    public async Task<GameRoom?> SetPlayerQuestionAsync(string connectionId, int questionIndex)
+    public async Task<GameRoom?> SetPlayerQuestionAsync(string roomId, string connectionId, int questionIndex)
     {
-        return await SetPlayerStatesAsync(connectionId, null, questionIndex, null);
+        return await SetPlayerStatesAsync(roomId, connectionId, questionIndex, null);
     }
 
-    public Task<GameRoom?> SetPlayerStatesAsync(string connectionId, PlayerStatus status)
+    public Task<GameRoom?> SetPlayerStatesAsync(string roomId, string connectionId, PlayerStatus status)
     {
-        return SetPlayerStatesAsync(connectionId, null, null, status);
+        return SetPlayerStatesAsync(roomId, connectionId, null, status);
     }
 
     public async Task<GameRoom?> SetQuizAsync(string connectionId, List<Quiz> questions)
@@ -122,17 +123,27 @@ public class RoomManager : IRoomManager
         var lockObj = keyLocks.GetOrAdd(roomId, _ => new object());
         lock (lockObj)
         {
-            if (roomStatus == RoomStatus.Close && Rooms[roomId].Status != roomStatus)
+            if (!Rooms.ContainsKey(roomId))
             {
-                _logger.LogInformation("Room {id} game over", roomId);
-                Rooms[roomId].Status = roomStatus;
-                _logger.LogInformation("Room {id} closed!", roomId);
+                _logger.LogError("SetGameRoomStatus {roomStatus} room {id} was not found", roomStatus, roomId);
+                return null;
+            }
+            var room = Rooms[roomId];
+            room.Status = roomStatus;
+            if (roomStatus == RoomStatus.Close)
+            {
+                if (room.Status == RoomStatus.GameStarted)
+                {
+                    _logger.LogDebug("Room {id} game over", roomId);
+                    Rooms.AddOrUpdate(roomId, room, (key, val) => room);
+                    _logger.LogDebug("Room {id} closed!", roomId);
+                }
             }
             else
             {
-                Rooms[roomId].Status = roomStatus;
+                Rooms.AddOrUpdate(roomId, room, (key, val) => room);
             }
-            return Rooms[roomId];
+            return room;
         }
     }
 
@@ -141,8 +152,7 @@ public class RoomManager : IRoomManager
         var room = await GetRoomByConnectionAsync(connectionId);
         if (room == null) return (false, null, null);
 
-        var player = room.Players[connectionId];
-        if (player == null) return (false, null, null);
+        if (!room.Players.TryGetValue(connectionId, out var player)) return (false, null, null);
 
         bool isCorrect = false;
         Quiz? nextQuiz = null;
@@ -163,7 +173,7 @@ public class RoomManager : IRoomManager
             {
                 player.CurrentQuestionIndex++;
                 _logger.LogDebug("Set player {name} in Question {index}", player.Name, player.CurrentQuestionIndex);
-                await SetPlayerQuestionAsync(connectionId, player.CurrentQuestionIndex);
+                await SetPlayerQuestionAsync(room.RoomId, connectionId, player.CurrentQuestionIndex);
                 nextQuiz = room.Questions[player.CurrentQuestionIndex];
             }
             else
@@ -185,17 +195,16 @@ public class RoomManager : IRoomManager
         return (isCorrect, room, nextQuiz);
     }
 
-    private async Task<GameRoom?> SetPlayerStatesAsync(string connectionId, string? playerName, int? questionIndex, PlayerStatus? status)
+    private async Task<GameRoom?> SetPlayerStatesAsync(string roomId, string connectionId, int? questionIndex, PlayerStatus? status)
     {
-        var room = await GetRoomByConnectionAsync(connectionId);
+        var room = Rooms.ContainsKey(roomId)? Rooms[roomId] : await GetRoomByConnectionAsync(connectionId);
         if (room == null) { return null; }
 
         if (room.Players.TryGetValue(connectionId, out var player))
         {
             player.Status = status ?? player.Status;
-            player.Name = playerName ?? player.Name;
             player.CurrentQuestionIndex = questionIndex ?? player.CurrentQuestionIndex;
-            room.Players[connectionId] = player;
+            room.Players.AddOrUpdate(connectionId, player, (key, val) => player);
         }
 
         return room;

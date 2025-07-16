@@ -7,8 +7,8 @@ public interface IRoomManager
     Task LeaveRoomAsync(string connectionId);
     GameRoom GetGameRoomById(string roomId);
     Task<GameRoom?> GetRoomByConnectionAsync(string connectionId);
-    Task<GameRoom?> SetPlayerQuestionAsync(string connectionId, int questionIndex);
-    Task<GameRoom?> SetPlayerStatesAsync(string connectionId, PlayerStatus status);
+    Task<GameRoom?> SetPlayerQuestionAsync(string roomId, string connectionId, int questionIndex);
+    Task<GameRoom?> SetPlayerStatesAsync(string roomId, string connectionId, PlayerStatus status);
     Task<GameRoom?> SetQuizAsync(string connectionId, List<Quiz> questions);
     Task<(bool, GameRoom?, Quiz?)> MarkAnswer(string connectionId, string answer);
     GameRoom? SetGameRoomStatus(string roomId, RoomStatus roomStatus);

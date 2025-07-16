@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
+using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
 while (true)
@@ -21,28 +22,12 @@ static async Task RunTaskAsync(string? value)
     for (int i = 0; i < connectionCount; i++)
     {
         var connection = new HubConnectionBuilder()
-            .WithUrl($"http://localhost:5000/quizhub?client={i}") // Optionally add a query param for identification
+            .WithUrl($"http://localhost:5000/quizhub", Microsoft.AspNetCore.Http.Connections.HttpTransportType.WebSockets | Microsoft.AspNetCore.Http.Connections.HttpTransportType.LongPolling) // Optionally add a query param for identification
+            .ConfigureLogging(logging =>
+            {
+                logging.SetMinimumLevel(LogLevel.Debug);
+            })
             .Build();
-
-        // Event handlers for each connection
-        connection.On("RequestName", () =>
-        {
-            _ = Task.Run(async () =>
-            {
-                // Automatically submit a name
-                await Task.Delay(500);
-                await connection.InvokeAsync("SubmitName", $"Bot_{i}");
-            });
-        });
-
-        connection.On<IEnumerable<PlayerState>>("ReadyForGame", (ready) =>
-        {
-            _ = Task.Run(async () =>
-            {
-                // Automatically ready for game
-
-            });
-        });
 
         connection.On("RequestSetTopic", () =>
         {
@@ -77,21 +62,6 @@ static async Task RunTaskAsync(string? value)
             // User status display removed
         });
 
-        connection.On<DateTime>("Pong", (serverTime) =>
-        {
-            _ = Task.Run(() => { });
-        });
-
-        // Example: send a ping every 2 seconds in the background
-        _ = Task.Run(async () =>
-        {
-            while (true)
-            {
-                await Task.Delay(TimeSpan.FromSeconds(2));
-                await connection.InvokeAsync("Ping");
-            }
-        });
-
         connectionTasks.Add(
             Task.Run(async () =>
             {
@@ -105,6 +75,7 @@ static async Task RunTaskAsync(string? value)
     }
 
     await Task.WhenAll(connectionTasks);
+    connectionTasks.Clear();
 }
 
 //await Task.Delay(-1);
