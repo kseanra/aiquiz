@@ -1,4 +1,5 @@
 using aiquiz_api.Services;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -33,7 +34,12 @@ builder.WebHost.ConfigureKestrel(options =>
 {
     options.Configure(builder.Configuration.GetSection("Kestrel"));
 });
+
 var app = builder.Build();
+
+// Enable Prometheus metrics endpoint
+app.UseMetricServer();
+app.UseHttpMetrics();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

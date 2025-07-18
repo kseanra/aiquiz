@@ -3,6 +3,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using aiquiz_api.Models;
 using Microsoft.AspNetCore.Mvc;
+using Prometheus;
 
 public class RoomManager : IRoomManager
 {
@@ -38,20 +39,24 @@ public class RoomManager : IRoomManager
             }
             player.Status = PlayerStatus.ReadyForGame;
             var lockObj = keyLocks.GetOrAdd(room.RoomId, _ => new object());
+            RoomCounter.Set(Rooms.Count);
             lock (lockObj)
             {
                 room.Players.AddOrUpdate(connectionId, player, (key, oldValue) => player);
                 room.Status = room.Players.Count() == MaxPlayers ? RoomStatus.Ready : room.Status;
                 _logger.LogDebug("Player {name} add to game room {id}", player.Name, room.RoomId);
+                var playerCount = Rooms.Sum(p => p.Value.Players.Count());
+                PlayerCounter.Set(playerCount);
                 return room;
             }
+
         }
     }
 
     public async Task LeaveRoomAsync(string connectionId)
     {
         var room = await GetRoomByConnectionAsync(connectionId);
-        
+
         if (room != null)
         {
             var lockObj = keyLocks.GetOrAdd(room.RoomId, _ => new object());
@@ -60,7 +65,7 @@ public class RoomManager : IRoomManager
                 if (room.Players.TryRemove(connectionId, out var player))
                 {
                     _logger.LogDebug("Removing player {player} from game room {id}", player?.Name, room.RoomId);
-
+                    PlayerCounter.Set(Rooms.Sum(p => p.Value.Players.Count()));
                     //Delete game room
                     if (!room.Players.Any() && room.Status == RoomStatus.Close)
                     {
@@ -71,6 +76,7 @@ public class RoomManager : IRoomManager
                         }
                         else
                         {
+                            RoomCounter.Set(Rooms.Count);
                             _logger.LogInformation("Game room {id} removed", room.RoomId);
                         }
                     }
@@ -184,9 +190,9 @@ public class RoomManager : IRoomManager
                     room = GetGameRoomById(room.RoomId);
                     if (room != null && player.Name != null && string.IsNullOrEmpty(room.GameWinner))
                     {
-                            _logger.LogInformation("Set game room's {id} with player {count} winner is : {name} ", room.RoomId, room.Players.Count(), player.Name);
-                            _logger.LogDebug(JsonSerializer.Serialize(room));
-                            room.GameWinner = player.Name;
+                        _logger.LogInformation("Set game room's {id} with player {count} winner is : {name} ", room.RoomId, room.Players.Count(), player.Name);
+                        _logger.LogDebug(JsonSerializer.Serialize(room));
+                        room.GameWinner = player.Name;
                     }
                 }
             }
@@ -197,7 +203,7 @@ public class RoomManager : IRoomManager
 
     private async Task<GameRoom?> SetPlayerStatesAsync(string roomId, string connectionId, int? questionIndex, PlayerStatus? status)
     {
-        var room = Rooms.ContainsKey(roomId)? Rooms[roomId] : await GetRoomByConnectionAsync(connectionId);
+        var room = Rooms.ContainsKey(roomId) ? Rooms[roomId] : await GetRoomByConnectionAsync(connectionId);
         if (room == null) { return null; }
 
         if (room.Players.TryGetValue(connectionId, out var player))
@@ -209,10 +215,21 @@ public class RoomManager : IRoomManager
 
         return room;
     }
-    
+
     public GameRoom? FindAvailableGameRoomAsync()
     {
         _logger.LogDebug("Find available game rooom : {rooms}", JsonSerializer.Serialize(Rooms));
         return Rooms.Values.FirstOrDefault(r => r.Status != RoomStatus.GameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < MaxPlayers);
     }
+
+    private static readonly Gauge RoomCounter = Metrics.CreateGauge(
+        "room_total",
+        "number of rooms"
+    );
+    
+    private static readonly Gauge PlayerCounter = Metrics.CreateGauge(
+        "player_total",
+        "number of players in the game"
+    );
+
 }

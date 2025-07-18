@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using System.Collections.Concurrent;
 using aiquiz_api.Models;
+using Prometheus;
 
 namespace aiquiz_api.Hubs
 {
@@ -32,9 +33,11 @@ namespace aiquiz_api.Hubs
         public async Task SubmitName(string name)
         {
             _logger.LogDebug("Client connected: {ConnectionId} set Name: {name}", Context.ConnectionId, name);
-            await Task.Run(() => {
+            await Task.Run(() =>
+            {
                 var player = new PlayerState() { ConnectionId = Context.ConnectionId, Name = name };
                 _lobby.AddOrUpdate(Context.ConnectionId, player, (key, oldValue) => player);
+                LobbyCounter.Set(_lobby.Count);
             });
         }
 
@@ -46,6 +49,7 @@ namespace aiquiz_api.Hubs
             if (gameRoom != null)
             {
                 _ = _lobby.Remove<string, PlayerState>(Context.ConnectionId, out PlayerState? player);
+                LobbyCounter.Set(_lobby.Count);
                 await SetTopic(gameRoom);
                 await NotifyAllPlayer(gameRoom, "PlayersStatus");
             }
@@ -59,7 +63,7 @@ namespace aiquiz_api.Hubs
                 var gameRoom = await _roomManager.GetRoomByConnectionAsync(Context.ConnectionId);
                 if (gameRoom?.Status == RoomStatus.Ready)
                 {
-                    StartGameAfterCountdown(gameRoom, topic, numQuestions); 
+                    StartGameAfterCountdown(gameRoom, topic, numQuestions);
                 }
             }
         }
@@ -87,11 +91,11 @@ namespace aiquiz_api.Hubs
             else
             {
                 // Optionally, you can notify the player or let them retry
-                await SendMessage(gameRoom,"IncorrectAnswer", 0);
+                await SendMessage(gameRoom, "IncorrectAnswer", 0);
             }
 
             // Notify all players about everyone's status
-            if(gameRoom != null)
+            if (gameRoom != null)
                 await NotifyAllPlayer(gameRoom, "PlayersStatus");
         }
 
@@ -112,7 +116,7 @@ namespace aiquiz_api.Hubs
             var room = _roomManager.JoinRoomAsync(Context.ConnectionId, player);
             if (room != null)
             {
-                _logger.LogDebug("Player {Name}: {ConnectionId} joined room {RoomId}",player.Name, Context.ConnectionId, room.RoomId);
+                _logger.LogDebug("Player {Name}: {ConnectionId} joined room {RoomId}", player.Name, Context.ConnectionId, room.RoomId);
                 await Groups.AddToGroupAsync(Context.ConnectionId, room.RoomId);
             }
             else
@@ -161,7 +165,7 @@ namespace aiquiz_api.Hubs
         private void StartGameAfterCountdown(GameRoom? gameRoom, string category, int? numQuestions = 4)
         {
             _logger.LogDebug("Send countdown to client");
-             if (gameRoom == null) return;
+            if (gameRoom == null) return;
             var roomId = gameRoom.RoomId;
             var questionsCopy = gameRoom.Questions.ToList();
             var logger = _logger;
@@ -177,14 +181,14 @@ namespace aiquiz_api.Hubs
                     _logger.LogDebug($"Generating question started: {questionGeneratedStarted}");
                     await hubContext.Clients.Group(roomId).SendAsync("StartCountdown", GameStarIn / 1000);
                     var room = roomManager.GetGameRoomById(roomId);
-                    room.Questions = await _quizManager.GenerateQuizForCategoryAsync(category, numberOfQuestion);;
+                    room.Questions = await _quizManager.GenerateQuizForCategoryAsync(category, numberOfQuestion); ;
                     var questionGeneratedCompleted = DateTime.Now;
                     _logger.LogDebug($"Generating questions completed: {questionGeneratedCompleted}");
                     if (room != null && room.Questions.Count > 0 && room.Status != RoomStatus.GameStarted)
                     {
                         var diff = (questionGeneratedCompleted - questionGeneratedStarted).TotalMilliseconds;
                         logger.LogDebug($"time diff is {diff}");
-                        var delaySeconds = GameStarIn - diff ;
+                        var delaySeconds = GameStarIn - diff;
                         logger.LogDebug($"Delay at {delaySeconds}");
                         await Task.Delay((int)delaySeconds);
                         logger.LogInformation("Send first question to room {id} users", roomId);
@@ -203,5 +207,9 @@ namespace aiquiz_api.Hubs
                 }
             });
         }
+        private static readonly Gauge LobbyCounter = Metrics.CreateGauge(
+            "lobby_total", 
+            "number of players in the lobby"
+        );
     }
 }

@@ -1,0 +1,9 @@
+global:
+  scrape_interval: 15s # How frequently to scrape targets
+  evaluation_interval: 15s # How frequently to evaluate rules
+
+scrape_configs:
+  - job_name: 'aiquiz-api'
+    metrics_path: '/metrics'    # Default is /metrics
+    static_configs:
+      - targets: ['host.docker.internal:5000'] # Use your actual host/port
