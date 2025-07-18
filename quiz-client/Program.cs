@@ -80,7 +80,7 @@ static async Task RunTaskAsync(string? value)
             Task.Run(async () =>
             {
                 try {
-                    await Task.Delay(new Random().Next(1000, 2000));
+                    await Task.Delay(new Random().Next(10000, 20000));
                     await connection.StartAsync();
                     await Task.Delay(500);
                     await connection.InvokeAsync("SubmitName", $"Bot_{Guid.NewGuid()}");
