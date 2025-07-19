@@ -111,13 +111,36 @@ namespace aiquiz_api.Hubs
             await _roomManager.LeaveRoomAsync(Context.ConnectionId);
         }
 
-        private async Task<GameRoom?> JoinRoom(PlayerState player)
+        private async Task<GameRoom?> JoinRoom(PlayerState player, bool privateRoom = false,  string? roomName = null, int? maxPlayer = 0)
         {
-            var room = _roomManager.JoinRoomAsync(Context.ConnectionId, player);
+            if (string.IsNullOrWhiteSpace(player.Name))
+            {
+                _logger.LogWarning("Player name is required to join a room.");
+                await Clients.Caller.SendAsync("Error", "You must submit your name before joining a room.");
+                return null;
+            }
+
+            if (privateRoom && string.IsNullOrWhiteSpace(roomName))
+            {
+                _logger.LogWarning("Room name is required for private room.");
+                await Clients.Caller.SendAsync("Error", "Room name is required for private room.");
+                return null;
+            }
+            
+            var room = privateRoom ? _roomManager.CreateRoom(roomName ?? string.Empty, player, maxPlayer, privateRoom) : _roomManager.JoinRoomAsync(Context.ConnectionId, player);
             if (room != null)
             {
                 _logger.LogDebug("Player {Name}: {ConnectionId} joined room {RoomId}", player.Name, Context.ConnectionId, room.RoomId);
                 await Groups.AddToGroupAsync(Context.ConnectionId, room.RoomId);
+                if (privateRoom && room != null)
+                {
+                    await SendMessage(room, "RoomCreated", room);
+                    _logger.LogInformation("Private room created: {RoomId} by {OwnerName}", room.RoomId, player.Name);
+                }
+                else
+                {
+                    _logger.LogInformation("Player {Name} joined room {RoomId}", player.Name, room?.RoomId);
+                }
             }
             else
             {
@@ -211,5 +234,31 @@ namespace aiquiz_api.Hubs
             "lobby_total", 
             "number of players in the lobby"
         );
+
+        public async Task CreatePrivateRoomAndReady(string roomName, string topic, int? numQuestions)
+        {
+            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(topic))
+            {
+                await Clients.Caller.SendAsync("Error", "Room name and topic are required.");
+                return;
+            }
+
+            if (!_lobby.TryGetValue(Context.ConnectionId, out PlayerState? player) || player == null)
+            {
+                _logger.LogWarning("Player not found in lobby for connection {ConnectionId}", Context.ConnectionId);
+                await Clients.Caller.SendAsync("Error", "You must submit your name before creating a room.");
+                return;
+            }
+
+            _logger.LogDebug("Player: {name} create game room: {name}", player.Name, roomName);
+            var gameRoom = await JoinRoom(player, true, roomName, numQuestions);
+            if (gameRoom != null)
+            {
+                _ = _lobby.Remove<string, PlayerState>(Context.ConnectionId, out PlayerState? _lobbyPlayer);
+                LobbyCounter.Set(_lobby.Count);
+                await SetTopic(gameRoom);
+                await NotifyAllPlayer(gameRoom, "PlayersStatus");
+            }
+        }
     }
 }

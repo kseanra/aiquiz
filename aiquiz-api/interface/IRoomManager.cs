@@ -13,4 +13,5 @@ public interface IRoomManager
     Task<(bool, GameRoom?, Quiz?)> MarkAnswer(string connectionId, string answer);
     GameRoom? SetGameRoomStatus(string roomId, RoomStatus roomStatus);
     bool GameRoomClosed(string roomId);
+    GameRoom? CreateRoom(string roomName, PlayerState owner, int? maxPlayer, bool isPrivate = false);
 }

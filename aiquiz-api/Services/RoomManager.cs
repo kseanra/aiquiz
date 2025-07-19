@@ -33,7 +33,7 @@ public class RoomManager : IRoomManager
             var room = FindAvailableGameRoomAsync();
             if (room == null)
             {
-                room = new GameRoom { RoomId = $"room-{Guid.NewGuid()}" };
+                room = new GameRoom { RoomId = $"room-{Guid.NewGuid()}", MaxPlayers = MaxPlayers , RoomName = "Default Room", Topic = null, Status = RoomStatus.Active };
                 Rooms.AddOrUpdate(room.RoomId, room, (key, oldValue) => room);
                 _logger.LogInformation("Create a new game room: {id}", room.RoomId);
             }
@@ -43,13 +43,47 @@ public class RoomManager : IRoomManager
             lock (lockObj)
             {
                 room.Players.AddOrUpdate(connectionId, player, (key, oldValue) => player);
-                room.Status = room.Players.Count() == MaxPlayers ? RoomStatus.Ready : room.Status;
+                room.Status = room.Players.Count() == room.MaxPlayers ? RoomStatus.Ready : room.Status;
                 _logger.LogDebug("Player {name} add to game room {id}", player.Name, room.RoomId);
                 var playerCount = Rooms.Sum(p => p.Value.Players.Count());
                 PlayerCounter.Set(playerCount);
                 return room;
             }
 
+        }
+    }
+
+    public GameRoom? CreateRoom(string roomName, PlayerState owner, int? maxPlayer, bool isPrivate = false)
+    {
+        lock (gloabLock)
+        {
+            if (string.IsNullOrWhiteSpace(roomName) || owner == null)
+                return null;
+
+            var roomId = $"room-{Guid.NewGuid()}";
+            var room = new GameRoom
+            {
+                RoomId = roomId,
+                RoomName = roomName,
+                IsPrivate = isPrivate,
+                MaxPlayers = maxPlayer,
+                OwnerId = Guid.Parse(owner.ConnectionId ?? Guid.NewGuid().ToString()),
+                Topic = null,
+                Status = RoomStatus.Active,
+            };
+            if (!string.IsNullOrEmpty(owner.ConnectionId))
+            {
+                room.Players.TryAdd(owner.ConnectionId, owner);
+            }
+            else
+            {
+                _logger.LogError("Owner's ConnectionId is null or empty. Cannot add to room.");
+                return null;
+            }
+            Rooms.TryAdd(roomId, room);
+            RoomCounter.Set(Rooms.Count);
+            _logger.LogInformation("Created private room {roomId} with owner {owner}", roomId, owner.Name);
+            return room;
         }
     }
 
@@ -92,7 +126,7 @@ public class RoomManager : IRoomManager
     public async Task<GameRoom?> GetRoomByConnectionAsync(string connectionId)
     {
         return await Task.Run(() =>
-            Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId)) ?? Rooms.Values.FirstOrDefault(r => r.Players.Count < MaxPlayers)
+            Rooms.Values.FirstOrDefault(r => r.Players.ContainsKey(connectionId)) ?? Rooms.Values.FirstOrDefault(r => r.Players.Count < r.MaxPlayers)
         );
     }
 
@@ -219,7 +253,7 @@ public class RoomManager : IRoomManager
     public GameRoom? FindAvailableGameRoomAsync()
     {
         _logger.LogDebug("Find available game rooom : {rooms}", JsonSerializer.Serialize(Rooms));
-        return Rooms.Values.FirstOrDefault(r => r.Status != RoomStatus.GameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < MaxPlayers);
+        return Rooms.Values.FirstOrDefault(r => r.Status != RoomStatus.GameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < r.MaxPlayers);
     }
 
     private static readonly Gauge RoomCounter = Metrics.CreateGauge(
@@ -231,5 +265,4 @@ public class RoomManager : IRoomManager
         "player_total",
         "number of players in the game"
     );
-
 }
