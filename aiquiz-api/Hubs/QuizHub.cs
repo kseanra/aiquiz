@@ -74,11 +74,11 @@ namespace aiquiz_api.Hubs
             }
         }
 
-        public async Task CreatePrivateRoomAndReady(string roomName, string topic, int? numQuestions)
+        public async Task CreatePrivateRoomAndReady(string roomName, string topic, int? maxPlayers = null)
         {
-            if (string.IsNullOrWhiteSpace(roomName) || string.IsNullOrWhiteSpace(topic))
+            if (string.IsNullOrWhiteSpace(roomName))
             {
-                await Clients.Caller.SendAsync("Error", "Room name and topic are required.");
+                await Clients.Caller.SendAsync("Error", "Room name are required.");
                 return;
             }
 
@@ -90,7 +90,7 @@ namespace aiquiz_api.Hubs
             }
 
             _logger.LogDebug("Player: {name} create game room: {name}", player.Name, roomName);
-            var gameRoom = await CreateRoom(player, roomName, numQuestions);
+            var gameRoom = await CreateRoom(player, roomName, maxPlayers);
             if (gameRoom != null)
             {
                 _ = _lobby.Remove<string, PlayerState>(Context.ConnectionId, out PlayerState? _lobbyPlayer);
