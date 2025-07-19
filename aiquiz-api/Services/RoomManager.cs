@@ -17,9 +17,10 @@ public class RoomManager : IRoomManager
     {
         _logger = logger;
     }
-    public GameRoom? GetGameRoomById(string roomId)
+    
+    public GameRoom GetGameRoomById(string roomId)
     {
-        return Rooms.TryGetValue(roomId, out var room) ? room : null;
+        return Rooms.TryGetValue(roomId, out var room) ? room : null!;
     }
 
     /// <summary>
@@ -41,6 +42,31 @@ public class RoomManager : IRoomManager
             player.Status = PlayerStatus.ReadyForGame;
             var lockObj = keyLocks.GetOrAdd(room.RoomId, _ => new object());
             RoomCounter.Set(Rooms.Count);
+            lock (lockObj)
+            {
+                room.Players.AddOrUpdate(connectionId, player, (key, oldValue) => player);
+                room.Status = room.Players.Count() == room.MaxPlayers ? RoomStatus.Ready : room.Status;
+                _logger.LogDebug("Player {name} add to game room {id}", player.Name, room.RoomId);
+                var playerCount = Rooms.Sum(p => p.Value.Players.Count());
+                PlayerCounter.Set(playerCount);
+                return room;
+            }
+
+        }
+    }
+
+    public GameRoom? JoinRoomByPasswordAsync(string connectionId, PlayerState player, string password)
+    {
+        lock (gloabLock)
+        {
+            var room = FindAvailableGameRoomByPasswordAsync(password);
+            if (room == null)
+            {
+                _logger.LogError("Can't find game room by password: {password}", password);
+                return null;
+            }
+            player.Status = PlayerStatus.ReadyForGame;
+            var lockObj = keyLocks.GetOrAdd(room.RoomId, _ => new object());
             lock (lockObj)
             {
                 room.Players.AddOrUpdate(connectionId, player, (key, oldValue) => player);
@@ -267,6 +293,12 @@ public class RoomManager : IRoomManager
     {
         _logger.LogDebug("Find available game rooom : {rooms}", JsonSerializer.Serialize(Rooms));
         return Rooms.Values.FirstOrDefault(r => r.Status != RoomStatus.GameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < r.MaxPlayers);
+    }
+
+    private GameRoom? FindAvailableGameRoomByPasswordAsync(string password)
+    {
+        _logger.LogDebug("Find available game rooom by password : {pass}", password);
+        return Rooms.Values.FirstOrDefault(r => r.Status != RoomStatus.GameStarted && string.IsNullOrEmpty(r.GameWinner) && r.Players.Count() < r.MaxPlayers && r.RoomPassword == password);
     }
 
     private static readonly Gauge RoomCounter = Metrics.CreateGauge(
