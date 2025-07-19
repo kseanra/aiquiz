@@ -1,0 +1,11 @@
+# datasource.yml
+apiVersion: 1
+
+datasources:
+  - name: aiquiz-api
+    uid: aes6rb7mjc8aob
+    type: prometheus
+    access: proxy
+    url: http://host.docker.internal:9090
+    isDefault: true
+    editable: true

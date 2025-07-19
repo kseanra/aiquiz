@@ -186,7 +186,7 @@
             "axisBorderShow": false,
             "axisCenteredZero": false,
             "axisColorMode": "text",
-            "axisLabel": "Total Mem",
+            "axisLabel": "",
             "axisPlacement": "auto",
             "barAlignment": 0,
             "barWidthFactor": 0.6,
@@ -292,30 +292,6 @@
             ]
           },
           {
-            "__systemRef": "hideSeriesFrom",
-            "matcher": {
-              "id": "byNames",
-              "options": {
-                "mode": "exclude",
-                "names": [
-                  "Gen0"
-                ],
-                "prefix": "All except:",
-                "readOnly": true
-              }
-            },
-            "properties": [
-              {
-                "id": "custom.hideFrom",
-                "value": {
-                  "legend": false,
-                  "tooltip": false,
-                  "viz": true
-                }
-              }
-            ]
-          },
-          {
             "matcher": {
               "id": "byName",
               "options": "Gen1"
@@ -324,7 +300,7 @@
               {
                 "id": "color",
                 "value": {
-                  "fixedColor": "dark-yellow",
+                  "fixedColor": "blue",
                   "mode": "fixed"
                 }
               }
@@ -355,6 +331,21 @@
                 "id": "color",
                 "value": {
                   "fixedColor": "dark-purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "loh"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-red",
                   "mode": "fixed"
                 }
               }
@@ -445,12 +436,13 @@
           },
           "disableTextWrap": false,
           "editorMode": "builder",
-          "expr": "system_runtime_gc_heap_size",
+          "exemplar": false,
+          "expr": "system_runtime_loh_size",
           "fullMetaSearch": false,
           "hide": false,
           "includeNullMetadata": true,
           "instant": false,
-          "legendFormat": "heap",
+          "legendFormat": "loh",
           "range": true,
           "refId": "E",
           "useBackend": false
@@ -1246,5 +1238,5 @@
   "timezone": "browser",
   "title": "SignalR",
   "uid": "40beeaf1-9f3b-475a-bcfd-fec368aad843",
-  "version": 60
+  "version": 3
 }

@@ -53,3 +53,5 @@ _ReSharper*/
 
 # Ignore local development settings
 appsettings.Development.json
+
+grafana/storage/*
