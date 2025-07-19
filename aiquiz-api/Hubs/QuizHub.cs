@@ -135,7 +135,7 @@ namespace aiquiz_api.Hubs
                 if (privateRoom && room != null)
                 {
                     await SendMessage(room, "RoomCreated", room);
-                    _logger.LogInformation("Private room created: {RoomId} by {OwnerName}", room.RoomId, player.Name);
+                    _logger.LogInformation("Private room created: {RoomId} by {OwnerName}, game password {password}", room.RoomId, player.Name, room.RoomPassword);
                 }
                 else
                 {
@@ -204,6 +204,12 @@ namespace aiquiz_api.Hubs
                     _logger.LogDebug($"Generating question started: {questionGeneratedStarted}");
                     await hubContext.Clients.Group(roomId).SendAsync("StartCountdown", GameStarIn / 1000);
                     var room = roomManager.GetGameRoomById(roomId);
+                    if (room == null)
+                    {
+                        _logger.LogError("Room {id} not found", roomId);
+                        await hubContext.Clients.Group(roomId).SendAsync("Error", "Room not found.");
+                        return;
+                    }
                     room.Questions = await _quizManager.GenerateQuizForCategoryAsync(category, numberOfQuestion); ;
                     var questionGeneratedCompleted = DateTime.Now;
                     _logger.LogDebug($"Generating questions completed: {questionGeneratedCompleted}");

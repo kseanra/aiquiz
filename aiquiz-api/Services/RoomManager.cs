@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using aiquiz_api.Models;
@@ -10,15 +11,15 @@ public class RoomManager : IRoomManager
     private static readonly ConcurrentDictionary<string, GameRoom> Rooms = new();
     private static readonly ConcurrentDictionary<string, object> keyLocks = new();
     private static readonly object gloabLock = new();
-    private const int MaxPlayers = 20; // Maximum number of players per room
+    private const int MaxPlayers = 2; // Maximum number of players per room
     private readonly ILogger<RoomManager> _logger;
     public RoomManager(ILogger<RoomManager> logger)
     {
         _logger = logger;
     }
-    public GameRoom GetGameRoomById(string roomId)
+    public GameRoom? GetGameRoomById(string roomId)
     {
-        return Rooms[roomId];
+        return Rooms.TryGetValue(roomId, out var room) ? room : null;
     }
 
     /// <summary>
@@ -33,7 +34,7 @@ public class RoomManager : IRoomManager
             var room = FindAvailableGameRoomAsync();
             if (room == null)
             {
-                room = new GameRoom { RoomId = $"room-{Guid.NewGuid()}", MaxPlayers = MaxPlayers , RoomName = "Default Room", Topic = null, Status = RoomStatus.Active };
+                room = new GameRoom { RoomId = $"room-{Guid.NewGuid()}", MaxPlayers = MaxPlayers, RoomName = "Default Room", Topic = null, Status = RoomStatus.Active };
                 Rooms.AddOrUpdate(room.RoomId, room, (key, oldValue) => room);
                 _logger.LogInformation("Create a new game room: {id}", room.RoomId);
             }
@@ -67,9 +68,10 @@ public class RoomManager : IRoomManager
                 RoomName = roomName,
                 IsPrivate = isPrivate,
                 MaxPlayers = maxPlayer,
-                OwnerId = Guid.Parse(owner.ConnectionId ?? Guid.NewGuid().ToString()),
+                OwnerId = owner.ConnectionId,
                 Topic = null,
                 Status = RoomStatus.Active,
+                RoomPassword = GenerateSecureCode()
             };
             if (!string.IsNullOrEmpty(owner.ConnectionId))
             {
@@ -151,9 +153,19 @@ public class RoomManager : IRoomManager
 
     public bool GameRoomClosed(string roomId)
     {
+        if (!Rooms.ContainsKey(roomId))
+        {
+            return true;
+        }
+
         var lockObj = keyLocks.GetOrAdd(roomId, _ => new object());
         lock (lockObj)
         {
+            Rooms.TryGetValue(roomId, out var room);
+            if (room == null)
+            {
+                return true; // Room not found, consider it closed
+            }   
             return Rooms[roomId].Status == RoomStatus.Close;
         }
     }
@@ -216,16 +228,17 @@ public class RoomManager : IRoomManager
                 await SetPlayerQuestionAsync(room.RoomId, connectionId, player.CurrentQuestionIndex);
                 nextQuiz = room.Questions[player.CurrentQuestionIndex];
             }
-            else
+            else if(keyLocks.ContainsKey(room.RoomId))
             {
                 object lockObj = keyLocks.GetOrAdd(room.RoomId, _ => new object());
                 lock (lockObj)
                 {
                     room = GetGameRoomById(room.RoomId);
-                    if (room != null && player.Name != null && string.IsNullOrEmpty(room.GameWinner))
+                    if (room != null && player.Name != null && string.IsNullOrEmpty(room.GameWinner) && !string.IsNullOrEmpty(player.ConnectionId))
                     {
                         _logger.LogInformation("Set game room's {id} with player {count} winner is : {name} ", room.RoomId, room.Players.Count(), player.Name);
                         _logger.LogDebug(JsonSerializer.Serialize(room));
+                        room.Players[player.ConnectionId].Status = PlayerStatus.GameWinner;
                         room.GameWinner = player.Name;
                     }
                 }
@@ -260,9 +273,20 @@ public class RoomManager : IRoomManager
         "room_total",
         "number of rooms"
     );
-    
+
     private static readonly Gauge PlayerCounter = Metrics.CreateGauge(
         "player_total",
         "number of players in the game"
     );
+    
+    private string GenerateSecureCode()
+    {
+        using (var rng = RandomNumberGenerator.Create())
+        {
+            byte[] bytes = new byte[4];
+            rng.GetBytes(bytes);
+            int value = BitConverter.ToInt32(bytes, 0) & 0x7FFFFFFF; // Make positive
+            return (value % 900000 + 100000).ToString();
+        }
+    }
 }

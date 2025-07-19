@@ -3,6 +3,7 @@ import * as signalR from '@microsoft/signalr';
 import './App.scss';
 import { Console } from 'console';
 import { stringify } from 'querystring';
+import { IGameRoom } from './model';
 
 const host = window.location.hostname; // dynamically resolves to localhost or IP
 const port = 5000;
@@ -28,6 +29,10 @@ function App() {
   const [numQuestions, setNumQuestions] = useState(4); // New state for number of questions
   const [countdown, setCountdown] = useState<number | null>(null); // Countdown seconds left
   const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [privateRoomName, setPrivateRoomName] = useState('');
+  const [privateRoomMaxPlayers, setPrivateRoomMaxPlayers] = useState(2);
+  const [createdRoom, setCreatedRoomId] = useState<IGameRoom | null>(null);
 
   // Map status code to string
   const statusToString = (status: any) => {
@@ -98,6 +103,7 @@ function App() {
       setPlayerStates(players);
       setLoadingQuestion(false);
       // Find winner
+      console.log("Players in GameOver:", JSON.stringify(players));
       const winner = players.find((p: any) => p.status === 6 || p.status === 'GameWinner');
       setWinnerName(winner ? winner.name : null);
     });
@@ -115,6 +121,15 @@ function App() {
 
     conn.on("RequestSetTopic", () => {
       setShowSetTopic(true);
+    });
+
+    conn.on("RoomCreated", (roomId: IGameRoom) => {
+      setCreatedRoomId(roomId);
+      setReady(true);
+      setLoadingQuestion(true); // Show loading spinner when ready
+    });
+    conn.on("Error", (msg: string) => {
+      alert(msg);
     });
 
     // --- COUNTDOWN LOGIC ---
@@ -197,24 +212,26 @@ function App() {
           </div>
         )}
         {!connected ? (
-          <form
-            className='form-margin-top'
-            onSubmit={e => {
-              e.preventDefault();
-              handleConnect();
-            }}
-          >
-            <label>
-              Enter your name:
-            </label>
-             <input
-                type='text'
-                value={name}
-                onChange={e => setName(e.target.value)}
-                autoFocus
-              />
-            <button type="submit">Enter</button>
-          </form>
+          <>
+            <form
+              className='form-margin-top'
+              onSubmit={e => {
+                e.preventDefault();
+                handleConnect();
+              }}
+            >
+              <label>
+                Enter your name:
+              </label>
+               <input
+                  type='text'
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                  autoFocus
+                />
+              <button type="submit">Enter</button>
+            </form>
+          </>
         ) : (
           <div>
             <h2>Welcome, {name}! Connected to the game room.</h2>
@@ -231,11 +248,24 @@ function App() {
                 </ul>
               </div>
             )}
-            {/* Hide Ready button after click */}
+             {createdRoom  && (
+              <div className="player-status-list">
+                <strong>Private Room Created</strong>
+                <div>Room ID: <strong>{createdRoom.roomName}</strong></div>
+                <div>Password: <strong>{createdRoom.roomPassword}</strong></div>
+                <button hidden= {true} onClick={() => { setCreatedRoomId(null); }}>OK</button>
+              </div>
+            )}
+            {/* Show Ready and Create Private Game Room buttons side by side before user is ready */}
             {!ready && (
-              <button className="ready-btn" onClick={handleReady}>
-                I am Ready
-              </button>
+              <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                <button className="ready-btn" onClick={handleReady}>
+                  I am Ready
+                </button>
+                <button onClick={() => setShowCreateRoom(true)}>
+                  Create Private Game Room
+                </button>
+              </div>
             )}
             {gameOver ? (
               <div className="game-over-box">
@@ -335,6 +365,47 @@ function App() {
               style={{ marginLeft: 12, width: 80 }}
             />
             <button type="submit">Set Topic</button>
+          </form>
+        </div>
+      )}
+      {showCreateRoom && (
+        <div className="set-topic-modal">
+          <form
+            className="set-topic-form"
+            onSubmit={async e => {
+              e.preventDefault();
+              if (connection && privateRoomName.trim() && privateRoomMaxPlayers > 1) {
+                await connection.invoke("CreatePrivateRoomAndReady", privateRoomName.trim(), topicInput.trim() || 'General', privateRoomMaxPlayers);
+                setShowCreateRoom(false);
+              }
+            }}
+          >
+            <h2>Create Private Game Room</h2>
+            <input
+              type="text"
+              value={privateRoomName}
+              onChange={e => setPrivateRoomName(e.target.value)}
+              placeholder="Room Name"
+              autoFocus
+            />
+            <input
+              type="number"
+              min={2}
+              max={20}
+              value={privateRoomMaxPlayers}
+              onChange={e => setPrivateRoomMaxPlayers(Number(e.target.value))}
+              placeholder="Max Players"
+              style={{ marginLeft: 12, width: 80 }}
+            />
+            <input
+              type="text"
+              value={topicInput}
+              onChange={e => setTopicInput(e.target.value)}
+              placeholder="Quiz Topic"
+              style={{ marginLeft: 12, width: 120 }}
+            />
+            <button type="submit">Create Room</button>
+            <button type="button" style={{marginLeft: 8}} onClick={() => setShowCreateRoom(false)}>Cancel</button>
           </form>
         </div>
       )}
