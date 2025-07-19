@@ -11,7 +11,7 @@ public class RoomManager : IRoomManager
     private static readonly ConcurrentDictionary<string, GameRoom> Rooms = new();
     private static readonly ConcurrentDictionary<string, object> keyLocks = new();
     private static readonly object gloabLock = new();
-    private const int MaxPlayers = 2; // Maximum number of players per room
+    private const int MaxPlayers = 20; // Maximum number of players per room
     private readonly ILogger<RoomManager> _logger;
     public RoomManager(ILogger<RoomManager> logger)
     {
