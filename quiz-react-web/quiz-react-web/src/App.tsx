@@ -30,6 +30,8 @@ function App() {
   const [countdown, setCountdown] = useState<number | null>(null); // Countdown seconds left
   const countdownInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [showJoinRoom, setShowJoinRoom] = useState(false);
+  const [joinRoomPassword, setJoinRoomPassword] = useState('');
   const [privateRoomName, setPrivateRoomName] = useState('');
   const [privateRoomMaxPlayers, setPrivateRoomMaxPlayers] = useState(2);
   const [createdRoom, setCreatedRoomId] = useState<IGameRoom | null>(null);
@@ -195,6 +197,10 @@ function App() {
     setGameOver(false);
     setWinnerName(null);
     setName('');
+    setCreatedRoomId(null);
+    setLoadingQuestion(false);
+    setCountdown(null);
+    setReady(false);
   };
 
   return (
@@ -256,7 +262,7 @@ function App() {
                 <button hidden= {true} onClick={() => { setCreatedRoomId(null); }}>OK</button>
               </div>
             )}
-            {/* Show Ready and Create Private Game Room buttons side by side before user is ready */}
+            {/* Show Ready, Create Private Game Room, and Join exist room buttons side by side before user is ready */}
             {!ready && (
               <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
                 <button className="ready-btn" onClick={handleReady}>
@@ -265,8 +271,39 @@ function App() {
                 <button onClick={() => setShowCreateRoom(true)}>
                   Create Private Game Room
                 </button>
+                <button onClick={() => setShowJoinRoom(true)}>
+                  Join exist room
+                </button>
               </div>
             )}
+      {showJoinRoom && (
+        <div className="set-topic-modal">
+          <form
+            className="set-topic-form"
+            onSubmit={async e => {
+              e.preventDefault();
+              if (connection && joinRoomPassword.trim()) {
+                await connection.invoke("JoinGameByPassword", joinRoomPassword.trim());
+                setShowJoinRoom(false);
+                setJoinRoomPassword('');
+                setReady(true); // Automatically set ready after joining
+                setLoadingQuestion(true); // Show loading spinner when ready
+              }
+            }}
+          >
+            <h2>Join Existing Room</h2>
+            <input
+              type="text"
+              value={joinRoomPassword}
+              onChange={e => setJoinRoomPassword(e.target.value)}
+              placeholder="Room Password"
+              autoFocus
+            />
+            <button type="submit">Join</button>
+            <button type="button" style={{marginLeft: 8}} onClick={() => { setShowJoinRoom(false); setJoinRoomPassword(''); }}>Cancel</button>
+          </form>
+        </div>
+      )}
             {gameOver ? (
               <div className="game-over-box">
                 <strong>Game Over!</strong><br />
