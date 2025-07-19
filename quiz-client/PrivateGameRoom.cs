@@ -5,9 +5,10 @@ public static class PrivateGameRoomTask
 {
     // Private Game Room
     // This method runs the specified number of private rooms (stub for now)
-    public static async Task RunPrivateGameRoomTaskAsync(string? value)
+    public static async Task RunPrivateGameRoomTaskAsync(string? value, string? maxPlayers = "4")
     {
         int.TryParse(value, out int roomCount);
+        int.TryParse(maxPlayers, out int maxPlayerCount);
         var rooms = new ConcurrentDictionary<string, GameRoom>();
         List<Task> connectionTasks = new();
 
@@ -34,7 +35,7 @@ public static class PrivateGameRoomTask
                         await Task.Delay(500);
                         await connection.InvokeAsync("SubmitName", $"Bot_{Guid.NewGuid()}");
                         await Task.Delay(500);
-                        await connection.InvokeAsync("CreatePrivateRoomAndReady", $"Room_{Guid.NewGuid()}", "NBA", 4);
+                        await connection.InvokeAsync("CreatePrivateRoomAndReady", $"Room_{Guid.NewGuid()}", "NBA", maxPlayerCount);
                     }
                     catch (Exception ex)
                     {

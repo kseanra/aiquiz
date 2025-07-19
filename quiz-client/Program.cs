@@ -24,7 +24,9 @@ while (true)
     {
         Console.Write("Enter number of private rooms: ");
         var input = Console.ReadLine();
-        await PrivateGameRoomTask.RunPrivateGameRoomTaskAsync(input);
+         Console.Write("Enter number of players: ");
+        var playerNum = Console.ReadLine();
+        await PrivateGameRoomTask.RunPrivateGameRoomTaskAsync(input, playerNum);
     }
     else
     {
